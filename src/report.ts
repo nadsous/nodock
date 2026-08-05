@@ -19,7 +19,7 @@ export function toSarif(report: ScanReport): object {
         tool: {
           driver: {
             name: 'Nodock',
-            version: '0.3.0',
+            version: '0.4.0',
             informationUri: 'https://github.com/nodock',
             rules: [
               ...new Set(report.findings.map((f) => f.id ?? 'nodock-finding')),

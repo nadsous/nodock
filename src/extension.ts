@@ -8,6 +8,7 @@ import { exportReport } from './report';
 import { fetchNews } from './feed';
 import { publishDiagnostics } from './diagnostics';
 import { resolveWorkspaceFile } from './paths';
+import { applyIgnoreRules, parseIgnoreFile, IgnoreRule } from './ignore';
 import {
   CodeEvidence,
   emptyEvidence,
@@ -150,6 +151,15 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
                 : triageFileFinding(f);
           }
 
+          // --- Baseline : faux positifs déjà arbitrés par l'équipe ---
+          const ignoreRules = await loadIgnoreRules();
+          const filtered = applyIgnoreRules(findings, ignoreRules);
+          findings.length = 0;
+          findings.push(...filtered.kept);
+          if (filtered.ignored > 0) {
+            notes.push(`${filtered.ignored} finding(s) masqué(s) par .nodockignore.`);
+          }
+
           findings.push(...legalChecklistFindings());
 
           // Ordre = ce qu'il faut traiter en premier : d'abord l'actionnable
@@ -232,6 +242,21 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
       this.post({ type: 'news', items: [], errors: [errorMessage(err)] });
     }
   }
+}
+
+/** Charge la baseline `.nodockignore` à la racine de chaque dossier du workspace. */
+async function loadIgnoreRules(): Promise<IgnoreRule[]> {
+  const rules: IgnoreRule[] = [];
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    try {
+      const uri = vscode.Uri.joinPath(folder.uri, '.nodockignore');
+      const text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+      rules.push(...parseIgnoreFile(text));
+    } catch {
+      // Pas de baseline dans ce dossier — cas normal.
+    }
+  }
+  return rules;
 }
 
 function errorMessage(err: unknown): string {

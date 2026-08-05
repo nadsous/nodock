@@ -192,7 +192,9 @@ export function triageDependency(
 /** Emplacements où un secret ou un motif de code n'a pas la même portée qu'en production. */
 const NON_PROD_PATH =
   /(^|[\\/])(tests?|__tests__|__mocks__|spec|specs|fixtures?|examples?|samples?|mocks?|docs?|demo|e2e|cypress|storybook)([\\/]|$)/i;
-const NON_PROD_FILE = /\.(test|spec|example|sample|mock|stories|fixture)\.[\w]+$|\.md$/i;
+const NON_PROD_FILE =
+  // `x.test.ts`, mais aussi `.env.example`, `test-smoke.mjs`, `config.sample`.
+  /\.(test|spec|example|sample|mock|stories|fixture)\.[\w]+$|\.(example|sample|template|dist)$|(^|[\\/])(test|spec)[-_][\w.-]+$|\.md$/i;
 
 /**
  * Triage d'un finding trouvé dans un fichier (secret, SAST, conformité).

@@ -1,0 +1,22 @@
+# Baseline Nodock pour Nodock lui-même.
+#
+# Un scanner contient forcément les motifs qu'il détecte : ses tables de règles
+# ressemblent à du code vulnérable, et ses fixtures de test contiennent de faux
+# secrets. Ce fichier documente ces cas au lieu de les laisser polluer chaque scan.
+#
+# Format :
+#   chemin/**            → tout ce qui matche
+#   REGLE                → cette règle, partout
+#   REGLE chemin/**      → cette règle, dans ces fichiers seulement
+
+# Les tables de règles définissent les motifs qu'elles détectent.
+src/sast.ts
+src/rgpd.ts
+src/secrets.ts
+
+# Le générateur de mentions légales cite les textes de loi (COPPA, RGPD…).
+src/legal.ts
+
+# Fixtures : faux secrets et code volontairement vulnérable.
+test/**
+test-smoke.mjs

@@ -33,6 +33,17 @@ export const SECRET_FILE_TYPES =
 
 const PLACEHOLDER = /(example|placeholder|your[_-]?|xxx+|changeme|dummy|test[_-]?key|<[^>]+>|\$\{)/i;
 
+/**
+ * Valeurs publiées dans les documentations officielles comme exemples.
+ * Les signaler en critique décrédibilise le rapport : ce ne sont pas des fuites.
+ */
+const KNOWN_EXAMPLES = new Set([
+  'AKIAIOSFODNN7EXAMPLE',
+  'AKIAI44QH8DHBEXAMPLE',
+  'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+  'je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY',
+]);
+
 /** Au-delà, la ligne est probablement minifiée : on l'ignore (bruit + coût regex). */
 const MAX_LINE_LENGTH = 2000;
 
@@ -59,6 +70,7 @@ export function scanSecretsInText(text: string, relPath: string): Finding[] {
     for (const rule of RULES) {
       if (rule.heuristic && isPlaceholder) continue;
       for (const m of line.matchAll(rule.regex)) {
+        if (KNOWN_EXAMPLES.has(m[0])) continue;
         findings.push({
           kind: 'secret',
           severity: rule.severity,

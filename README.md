@@ -13,6 +13,8 @@
 | 📰 **Feed** | CVE récentes (API NVD) + flux RSS d'actualités sécurité configurables |
 | 🎯 **Score** | Score de sécurité /100 avec anneau de progression animé |
 | 🔎 **Problèmes** | Les vulnérabilités sont soulignées dans l'éditeur et listées dans l'onglet **Problèmes** de VS Code |
+| 🎯 **Triage** | Chaque alerte est confrontée au code : une faille n'est « exploitable » que si le projet atteint réellement l'API vulnérable citée par l'avis |
+| 🤫 **Baseline** | `.nodockignore` pour arbitrer une fois pour toutes les faux positifs |
 | 📤 **Export** | Rapport en **JSON** ou **SARIF** (compatible GitHub Code Scanning / CI) |
 
 ## Utilisation
@@ -44,6 +46,46 @@ La commande `Nodock: Générer les mentions légales (RGPD, CCPA…)` crée un f
 `mentions-legales.md` **multijuridictions** pré-rempli à la racine du projet.
 
 > ⚠️ Modèle fourni à titre indicatif — pas un conseil juridique.
+
+## 🎯 Triage : est-ce que ça me concerne ?
+
+Un scanner qui compare des numéros de version signale des failles qu'aucun chemin
+de code n'atteint. Nodock lit les API citées par l'avis de sécurité (entre
+backticks : `oidcProvider()`, `pkg/plugins/mcp`…) et vérifie si votre code les
+utilise réellement.
+
+| Verdict | Signification |
+|---|---|
+| **Exploitable** | Le paquet est importé **et** l'API vulnérable apparaît dans le code |
+| **À vérifier** | Importé, mais l'avis ne nomme aucune API précise |
+| **Aucun chemin détecté** | Paquet jamais importé, ou importé sans trace de l'API vulnérable |
+
+> « Aucun chemin détecté » ne veut **pas** dire « non vulnérable ». Un usage hors
+> code applicatif (build, CLI) reste invisible à cette analyse, et un futur usage
+> réintroduirait la faille. Rien n'est masqué : ces findings sont seulement
+> rétrogradés d'un cran et classés en fin de liste.
+
+Les secrets et les motifs de code sont triés de la même façon, par emplacement :
+un secret dans `tests/fixtures/` ou `.env.example` n'a pas la portée du même
+secret en production.
+
+## 🤫 `.nodockignore`
+
+Pour arbitrer un faux positif une fois pour toutes, à la racine du projet :
+
+```gitignore
+# un chemin
+src/vendor/**
+
+# une règle, partout
+CMP-009
+
+# une règle, sur un chemin précis
+NDK-JS-001 src/rules/**
+
+# une vulnérabilité précise
+CVE-2026-53512
+```
 
 ## Configuration
 
