@@ -1,6 +1,24 @@
-# 🛡️ Nodock
+<p align="center">
+  <img src="media/nodock.svg" alt="Nodock" width="200">
+</p>
 
-**Scanner de vulnérabilités directement dans VS Code.** Nodock analyse vos dépendances, détecte vos secrets exposés, scanne votre code et vous tient informé des dernières vulnérabilités — avec une interface qui suit le thème de votre IDE.
+<h1 align="center">Nodock</h1>
+
+<p align="center">
+  <strong>Scanner de vulnérabilités directement dans VS Code.</strong><br>
+  Dépendances, secrets, code et conformité — avec un triage qui vérifie
+  si la faille concerne <em>vraiment</em> votre projet.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/VS%20Code-%5E1.90.0-0098FF" alt="VS Code ^1.90.0">
+  <img src="https://img.shields.io/badge/licence-MIT-green" alt="Licence MIT">
+  <img src="https://img.shields.io/badge/d%C3%A9pendances-0-brightgreen" alt="Zéro dépendance runtime">
+</p>
+
+---
+
+Nodock analyse vos dépendances, détecte vos secrets exposés, scanne votre code et vous tient informé des dernières vulnérabilités — avec une interface qui suit le thème de votre IDE.
 
 ## Fonctionnalités
 
