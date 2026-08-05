@@ -2,7 +2,7 @@
   "name": "nodock",
   "displayName": "Nodock",
   "description": "Scanner de vulnérabilités : dépendances (OSV), secrets, code (SAST) et actualités sécurité — directement dans VS Code.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "nodock",
   "license": "MIT",
   "repository": {
@@ -106,6 +106,9 @@
           "default": [
             "node_modules",
             ".git",
+            ".claude",
+            ".idea",
+            ".vscode-test",
             "dist",
             "out",
             "build",
@@ -138,7 +141,8 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run compile && node scripts/build-readme.cjs",
+    "package": "npm run compile && node scripts/build-readme.cjs && vsce package --readme-path README.vsix.md",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "test": "tsc -p ./ && node --test test/*.test.cjs"

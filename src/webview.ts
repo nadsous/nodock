@@ -321,7 +321,7 @@ export function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
 
   const SEV_COLOR = { critical:'#f14c4c', high:'#f48771', medium:'#e2c08d', low:'#4ec9b0', info:'#75beff' };
   const SEV_LABEL = { critical:'Critique', high:'Élevée', medium:'Moyenne', low:'Faible', info:'Info' };
-  const KIND_LABEL = { dependency:'📦 Dépendances', secret:'🔑 Secrets', sast:'🐛 Code (SAST)', rgpd:'⚖️ Conformité mondiale & Mentions légales' };
+  const KIND_LABEL = { dependency:'📦 Dépendances', secret:'🔑 Secrets', sast:'🐛 Code (SAST)', standards:'📐 Normes de codage', rgpd:'⚖️ Conformité mondiale & Mentions légales' };
   const VERDICT_LABEL = { probable:'Exploitable', 'a-verifier':'À vérifier', improbable:'Aucun chemin détecté' };
 
   // Icône morph : bouclier -> alerte au survol
@@ -361,7 +361,7 @@ export function getWebviewHtml(webview: vscode.Webview, nonce: string): string {
       wrap.innerHTML = '<div class="empty">Aucun résultat pour ce filtre.</div>';
       return;
     }
-    for (const kind of ['dependency','secret','sast','rgpd']) {
+    for (const kind of ['dependency','secret','sast','standards','rgpd']) {
       const group = list.filter(f => f.kind === kind);
       if (!group.length) continue;
       const h = document.createElement('div');

@@ -8,3 +8,4 @@ out/
 # Rapports générés par un scan
 nodock-report.json
 mentions-legales.md
+README.vsix.md

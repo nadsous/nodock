@@ -8,7 +8,15 @@ interface SastRule {
   description: string;
   /** Extensions ciblées par la règle. */
   languages: RegExp;
+  /**
+   * Motif qui disculpe le match. Testé sur une fenêtre de quelques lignes,
+   * car en JSX la valeur injectée est souvent sur la ligne suivante.
+   */
+  exempt?: RegExp;
 }
+
+/** Lignes examinées de part et d'autre du match pour évaluer une exemption. */
+const EXEMPT_WINDOW = 2;
 
 const JS = /\.([jt]sx?|mjs|cjs|vue|svelte)$/i;
 const PY = /\.py$/i;
@@ -17,8 +25,11 @@ const RULES: SastRule[] = [
   // --- JavaScript / TypeScript ---
   { id: 'NDK-JS-001', name: 'eval()', regex: /\beval\s*\(/, severity: 'high', description: 'eval() exécute du code arbitraire — injection possible. Utilisez JSON.parse ou une alternative sûre.', languages: JS },
   { id: 'NDK-JS-002', name: 'Function() dynamique', regex: /new\s+Function\s*\(/, severity: 'high', description: 'new Function() équivaut à eval(). Évitez la génération de code dynamique.', languages: JS },
-  { id: 'NDK-JS-003', name: 'innerHTML', regex: /\.innerHTML\s*=/, severity: 'medium', description: 'Affectation à innerHTML — risque XSS si la donnée vient de l\'utilisateur. Préférez textContent.', languages: JS },
-  { id: 'NDK-JS-004', name: 'dangerouslySetInnerHTML', regex: /dangerouslySetInnerHTML/, severity: 'medium', description: 'Injection HTML brute dans React — risque XSS. Sanitizez avec DOMPurify.', languages: JS },
+  // Vider un élément (`= ''`) ou y mettre une constante ne présente aucun risque.
+  { id: 'NDK-JS-003', name: 'innerHTML', regex: /\.innerHTML\s*=/, severity: 'medium', description: 'Affectation à innerHTML — risque XSS si la donnée vient de l\'utilisateur. Préférez textContent.', languages: JS, exempt: /\.innerHTML\s*=\s*(['"`]\s*['"`]|['"][^'"]*['"]\s*;?\s*$)/ },
+  // JSON.stringify produit du JSON échappé : c'est le motif JSON-LD standard de
+  // Next.js, et un contenu passé par un sanitizer n'est pas non plus une injection.
+  { id: 'NDK-JS-004', name: 'dangerouslySetInnerHTML', regex: /dangerouslySetInnerHTML/, severity: 'medium', description: 'Injection HTML brute dans React — risque XSS. Sanitizez avec DOMPurify.', languages: JS, exempt: /JSON\.stringify|DOMPurify|sanitiz(e|ed|er|eHtml)|escapeHtml/i },
   { id: 'NDK-JS-005', name: 'child_process exec', regex: /\bexec\s*\(\s*[`'"]/, severity: 'high', description: 'exec() avec chaîne — injection de commandes si la donnée est externe. Préférez execFile/spawn avec tableau d\'arguments.', languages: JS },
   { id: 'NDK-JS-006', name: 'SQL concaténé', regex: /(SELECT|INSERT|UPDATE|DELETE|DROP)\s+[^`'"]*['"`]\s*\+/i, severity: 'high', description: 'Requête SQL construite par concaténation — injection SQL. Utilisez des requêtes paramétrées.', languages: JS },
   { id: 'NDK-JS-007', name: 'Crypto faible (MD5/SHA1)', regex: /createHash\s*\(\s*['"](md5|sha1)['"]/, severity: 'medium', description: 'MD5/SHA1 sont cassés. Utilisez SHA-256+ (ou bcrypt/argon2 pour les mots de passe).', languages: JS },
@@ -58,6 +69,12 @@ export function scanCodeInText(fsPath: string, relPath: string, text: string): F
     if (COMMENT.test(line)) return;
     for (const rule of applicable) {
       if (rule.regex.test(line)) {
+        if (rule.exempt) {
+          const window = lines
+            .slice(Math.max(0, i - EXEMPT_WINDOW), i + EXEMPT_WINDOW + 1)
+            .join('\n');
+          if (rule.exempt.test(window)) continue;
+        }
         findings.push({
           kind: 'sast',
           severity: rule.severity,

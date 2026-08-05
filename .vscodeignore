@@ -12,3 +12,5 @@ package-lock.json
 .vscode/**
 **/*.vsix
 .nodockignore
+scripts/**
+README.md

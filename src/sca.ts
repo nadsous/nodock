@@ -134,6 +134,8 @@ export interface ScaResult {
   scanned: number;
   /** Avertissements non bloquants à afficher (imprécision, troncature…). */
   notes: string[];
+  /** Versions installées (nom → version), pour conditionner les règles de normes. */
+  installed: Map<string, string>;
 }
 
 /** Findings de dépendances sans avis de sécurité : cohérence de l'arbre. */
@@ -164,7 +166,16 @@ export async function scanDependencies(opts: {
       'Certaines versions proviennent de ranges (^1.2.3) faute de lockfile — résultats approximatifs.'
     );
   }
-  if (deps.length === 0) return { findings: [], scanned: 0, notes };
+  // La plus haute version installée fait foi pour les règles de normes.
+  const installed = new Map<string, string>();
+  for (const d of deps) {
+    const current = installed.get(d.name);
+    if (!current || d.version.localeCompare(current, undefined, { numeric: true }) > 0) {
+      installed.set(d.name, d.version);
+    }
+  }
+
+  if (deps.length === 0) return { findings: [], scanned: 0, notes, installed };
 
   const hygiene = hygieneFindings(deps, declarations);
 
@@ -251,5 +262,5 @@ export async function scanDependencies(opts: {
     }
   }
 
-  return { findings, scanned: deps.length, notes };
+  return { findings, scanned: deps.length, notes, installed };
 }

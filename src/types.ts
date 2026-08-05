@@ -16,7 +16,7 @@ export interface Triage {
 }
 
 export interface Finding {
-  kind: 'dependency' | 'secret' | 'sast' | 'rgpd';
+  kind: 'dependency' | 'secret' | 'sast' | 'rgpd' | 'standards';
   severity: Severity;
   title: string;
   description: string;

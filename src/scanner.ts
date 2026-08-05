@@ -2,10 +2,16 @@ import * as vscode from 'vscode';
 import { Finding, TriageProbe } from './types';
 import { SECRET_FILE_TYPES, scanSecretsInText } from './secrets';
 import { SAST_FILE_TYPES, scanCodeInText } from './sast';
-import { RGPD_FILE_TYPES, scanRgpdInText } from './rgpd';
+import { RGPD_FILE_TYPES, scanRgpdInText, aggregateCompliance } from './rgpd';
 import { extractImports } from './imports';
 import { CodeEvidence, emptyEvidence } from './triage';
 import { isGeneratedPath, shouldSkipGenerated } from './generated';
+import {
+  aggregateStandards,
+  applicableRules,
+  scanStandardsInText,
+  STANDARDS_FILE_TYPES,
+} from './standards';
 
 export interface FileScanResult {
   findings: Finding[];
@@ -63,10 +69,23 @@ export async function scanWorkspaceFiles(opts: {
   maxFiles: number;
   /** API vulnérables à rechercher, issues des avis de sécurité. */
   probes?: TriageProbe[];
+  /** Versions installées, pour n'activer que les règles de normes pertinentes. */
+  installed?: Map<string, string>;
   token?: vscode.CancellationToken;
   onProgress?: (message: string) => void;
 }): Promise<FileScanResult> {
-  const { exclude, maxFileSizeKB, maxFiles, probes = [], token, onProgress } = opts;
+  const {
+    exclude,
+    maxFileSizeKB,
+    maxFiles,
+    probes = [],
+    installed = new Map<string, string>(),
+    token,
+    onProgress,
+  } = opts;
+
+  // Règles de normes retenues selon les versions réellement installées.
+  const standardRules = applicableRules(installed);
 
   // Sondes indexées par paquet : on ne cherche les symboles d'un avis que dans
   // les fichiers qui importent le paquet visé.
@@ -100,7 +119,8 @@ export async function scanWorkspaceFiles(opts: {
       !isGeneratedPath(u.fsPath) &&
       (SECRET_FILE_TYPES.test(u.fsPath) ||
         SAST_FILE_TYPES.test(u.fsPath) ||
-        RGPD_FILE_TYPES.test(u.fsPath))
+        RGPD_FILE_TYPES.test(u.fsPath) ||
+        STANDARDS_FILE_TYPES.test(u.fsPath))
   );
 
   const findings: Finding[] = [];
@@ -164,6 +184,9 @@ export async function scanWorkspaceFiles(opts: {
       if (SECRET_FILE_TYPES.test(uri.fsPath)) perFile.push(...scanSecretsInText(text, rel));
       if (SAST_FILE_TYPES.test(uri.fsPath)) perFile.push(...scanCodeInText(uri.fsPath, rel, text));
       if (RGPD_FILE_TYPES.test(uri.fsPath)) perFile.push(...scanRgpdInText(uri.fsPath, rel, text));
+      if (standardRules.length > 0 && STANDARDS_FILE_TYPES.test(uri.fsPath)) {
+        perFile.push(...scanStandardsInText(uri.fsPath, rel, text, standardRules));
+      }
 
       findings.push(...capPerRule(perFile, rel));
     } catch {
@@ -182,5 +205,15 @@ export async function scanWorkspaceFiles(opts: {
     );
   }
 
-  return { findings, filesScanned, notes, evidence };
+  // Conformité et migrations se raisonnent à l'échelle du projet, pas du fichier.
+  const compliance = findings.filter((f) => f.kind === 'rgpd');
+  const standards = findings.filter((f) => f.kind === 'standards');
+  const rest = findings.filter((f) => f.kind !== 'rgpd' && f.kind !== 'standards');
+
+  return {
+    findings: [...rest, ...aggregateStandards(standards), ...aggregateCompliance(compliance)],
+    filesScanned,
+    notes,
+    evidence,
+  };
 }

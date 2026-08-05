@@ -105,6 +105,7 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
           const findings: Finding[] = [];
           const notes: string[] = [];
           let dependenciesScanned = 0;
+          let installed = new Map<string, string>();
 
           // --- Dépendances (réseau) ---
           // Isolé : une panne de l'API OSV ne doit pas emporter le reste du scan.
@@ -114,6 +115,7 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
             findings.push(...sca.findings);
             notes.push(...sca.notes);
             dependenciesScanned = sca.scanned;
+            installed = sca.installed;
           } catch (err) {
             notes.push(`Analyse des dépendances indisponible : ${errorMessage(err)}`);
           }
@@ -130,6 +132,7 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
               maxFileSizeKB,
               maxFiles,
               probes: findings.map((f) => f.probe).filter((p) => p !== undefined),
+              installed,
               token,
               onProgress: step,
             });
