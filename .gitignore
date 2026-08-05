@@ -1,0 +1,10 @@
+node_modules/
+out/
+*.vsix
+
+# Local tooling / agent settings
+.claude/
+
+# Rapports générés par un scan
+nodock-report.json
+mentions-legales.md

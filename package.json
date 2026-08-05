@@ -1,0 +1,151 @@
+{
+  "name": "nodock",
+  "displayName": "Nodock",
+  "description": "Scanner de vulnérabilités : dépendances (OSV), secrets, code (SAST) et actualités sécurité — directement dans VS Code.",
+  "version": "0.3.0",
+  "publisher": "nodock",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nadsous/nodock.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nadsous/nodock/issues"
+  },
+  "homepage": "https://github.com/nadsous/nodock#readme",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Linters"
+  ],
+  "keywords": [
+    "security",
+    "vulnerabilities",
+    "cve",
+    "secrets",
+    "sast",
+    "osv"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nodock",
+          "title": "Nodock",
+          "icon": "media/nodock.svg"
+        }
+      ]
+    },
+    "views": {
+      "nodock": [
+        {
+          "type": "webview",
+          "id": "nodock.panel",
+          "name": "Sécurité"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "nodock.scan",
+        "title": "Nodock: Scanner le projet",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "nodock.refreshNews",
+        "title": "Nodock: Actualiser les actualités",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "nodock.exportReport",
+        "title": "Nodock: Exporter le rapport (JSON/SARIF)",
+        "icon": "$(export)"
+      },
+      {
+        "command": "nodock.legalNotice",
+        "title": "Nodock: Générer les mentions légales (RGPD, CCPA…)",
+        "icon": "$(law)"
+      }
+    ],
+    "configuration": {
+      "title": "Nodock",
+      "properties": {
+        "nodock.rssFeeds": {
+          "type": "array",
+          "default": [
+            "https://feeds.feedburner.com/TheHackersNews"
+          ],
+          "description": "Flux RSS d'actualités sécurité à afficher"
+        },
+        "nodock.maxFileSizeKB": {
+          "type": "number",
+          "default": 512,
+          "description": "Taille max des fichiers analysés (Ko)"
+        },
+        "nodock.showInProblems": {
+          "type": "boolean",
+          "default": true,
+          "description": "Souligner les vulnérabilités dans l'éditeur et les lister dans l'onglet Problèmes"
+        },
+        "nodock.downgradeUnreachable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Rétrograder d'un cran, dans l'onglet Problèmes, les vulnérabilités dont aucun chemin de code n'a été détecté (jamais masquées)"
+        },
+        "nodock.maxFiles": {
+          "type": "number",
+          "default": 5000,
+          "description": "Nombre max de fichiers analysés par scan (au-delà, un avertissement est affiché)"
+        },
+        "nodock.excludeFolders": {
+          "type": "array",
+          "default": [
+            "node_modules",
+            ".git",
+            "dist",
+            "out",
+            "build",
+            "vendor",
+            ".venv",
+            "venv",
+            ".next",
+            ".nuxt",
+            ".svelte-kit",
+            ".astro",
+            ".output",
+            ".vercel",
+            ".netlify",
+            ".turbo",
+            ".cache",
+            ".parcel-cache",
+            "coverage",
+            "__pycache__",
+            ".tox",
+            ".mypy_cache",
+            ".pytest_cache",
+            "target",
+            "Pods",
+            "bin",
+            "obj"
+          ],
+          "description": "Dossiers exclus du scan (sorties de build, caches, dépendances)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "tsc -p ./ && node --test test/*.test.cjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.4.0"
+  }
+}
