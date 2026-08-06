@@ -11,20 +11,100 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/VS%20Code-%5E1.90.0-0098FF" alt="VS Code ^1.90.0">
+  <a href="https://marketplace.visualstudio.com/items?itemName=nadsite.nodock"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-nadsite.nodock-0098FF" alt="Sur le VS Code Marketplace"></a>
+  <a href="https://open-vsx.org/extension/nadsite/nodock"><img src="https://img.shields.io/open-vsx/v/nadsite/nodock?label=Open%20VSX&color=a60ee5" alt="Sur Open VSX"></a>
+</p>
+
+<p align="center">
+  <a href="https://open-vsx.org/extension/nadsite/nodock"><img src="https://img.shields.io/open-vsx/dt/nadsite/nodock?label=t%C3%A9l%C3%A9chargements&color=success" alt="Téléchargements"></a>
+  <a href="https://open-vsx.org/extension/nadsite/nodock"><img src="https://img.shields.io/open-vsx/rating/nadsite/nodock?label=note" alt="Note"></a>
+  <a href="https://github.com/nadsous/nodock/stargazers"><img src="https://img.shields.io/github/stars/nadsous/nodock?style=flat&color=yellow&logo=github" alt="Étoiles GitHub"></a>
+  <a href="https://github.com/nadsous/nodock/issues"><img src="https://img.shields.io/github/issues/nadsous/nodock?color=orange&logo=github" alt="Issues"></a>
   <img src="https://img.shields.io/badge/licence-MIT-green" alt="Licence MIT">
-  <img src="https://img.shields.io/badge/d%C3%A9pendances%20lourdes-0-brightgreen" alt="Aucune dépendance lourde">
 </p>
 
 ---
 
 Nodock analyse vos dépendances, détecte vos secrets exposés, scanne votre code et vous tient informé des dernières vulnérabilités — avec une interface qui suit le thème de votre IDE.
 
+## 📥 Installation
+
+### 🟦 VS Code
+
+Panneau **Extensions** (`Ctrl+Shift+X`) → cherchez **Nodock** → **Installer**.
+
+Ou depuis la palette (`Ctrl+P`) :
+
+```
+ext install nadsite.nodock
+```
+
+Ou en ligne de commande :
+
+```bash
+code --install-extension nadsite.nodock
+```
+
+### <img src="https://cdn.simpleicons.org/cursor/000000/FFFFFF" width="16" align="top"> Cursor
+
+Cursor s'appuie sur [Open VSX](https://open-vsx.org/extension/nadsite/nodock), où Nodock est publié.
+
+Panneau **Extensions** (`Ctrl+Shift+X`) → cherchez **Nodock** → **Installer**.
+
+Ou en ligne de commande :
+
+```bash
+cursor --install-extension nadsite.nodock
+```
+
+> Pour vérifier : `cursor --list-extensions --show-versions | findstr nodock`
+
+### <img src="https://cdn.simpleicons.org/windsurf/09B6A2" width="16" align="top"> Windsurf · <img src="https://cdn.simpleicons.org/vscodium/2F80ED" width="16" align="top"> VSCodium · <img src="https://cdn.simpleicons.org/gitpod/FFAE33" width="16" align="top"> Gitpod
+
+Ces éditeurs utilisent également Open VSX : cherchez **Nodock** dans leur panneau Extensions, ou installez en ligne de commande.
+
+```bash
+windsurf --install-extension nadsite.nodock
+codium   --install-extension nadsite.nodock
+```
+
+### 📦 Depuis un fichier `.vsix`
+
+Pour une version précise ou une installation hors ligne : téléchargez le `.vsix` depuis les [releases GitHub](https://github.com/nadsous/nodock/releases), puis
+
+```bash
+cursor --install-extension nodock-0.7.8.vsix
+```
+
+Ou par l'interface : `Ctrl+Shift+P` → **Extensions: Install from VSIX…**
+
+### 🛠 Depuis les sources
+
+```bash
+git clone https://github.com/nadsous/nodock.git
+cd nodock
+npm install
+npm run compile
+npx @vscode/vsce package    # produit nodock-X.Y.Z.vsix
+```
+
+`F5` lance directement un hôte de débogage avec l'extension chargée.
+
+## 🚀 Démarrage
+
+1. Ouvrez un projet
+2. Cliquez sur l'icône **bouclier** dans la barre d'activité
+3. **Scanner le projet**
+
+Cliquez sur un résultat pour le déplier : vous y trouverez le chemin d'attaque, le correctif, et de quoi ouvrir le fichier concerné ou l'avis de sécurité.
+
+Le premier scan interroge [OSV.dev](https://osv.dev) pour vos dépendances — aucune inscription ni clé API n'est requise. Rien n'est envoyé à un serveur tiers en dehors des noms et versions de paquets ; **votre code ne quitte jamais votre machine**.
+
 > **Écosystèmes couverts** — Dépendances : npm, PyPI, Cargo, Go, Maven, RubyGems,
 > Packagist (PHP), NuGet (.NET). Analyse de code et triage : JS/TS, Python, Go,
 > Rust, Java/Kotlin, PHP, Ruby, C#. Et vos propres règles en **templates YAML**.
 
-## Fonctionnalités
+## ✨ Fonctionnalités
 
 | Module | Description |
 |---|---|
@@ -45,14 +125,7 @@ Nodock analyse vos dépendances, détecte vos secrets exposés, scanne votre cod
 | 🤫 **Baseline** | `.nodockignore` pour arbitrer une fois pour toutes les faux positifs |
 | 📤 **Export** | Rapport en **JSON**, **SARIF** (compatible GitHub Code Scanning / CI) ou **CycloneDX** (SBOM : inventaire logiciel + vulnérabilités avec état d'analyse issu du triage) |
 
-## Utilisation
-
-1. Ouvrez un projet dans VS Code
-2. Cliquez sur l'icône **Nodock** (bouclier) dans la barre d'activité
-3. Cliquez sur **Scanner le projet**
-4. Cliquez sur une vulnérabilité pour ouvrir le fichier / le lien de la CVE
-
-## Commandes
+## ⌨️ Commandes
 
 - `Nodock: Scanner le projet`
 - `Nodock: Actualiser les actualités`
@@ -146,7 +219,7 @@ NDK-JS-001 src/rules/**
 CVE-2026-53512
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 | Paramètre | Défaut | Description |
 |---|---|---|
@@ -158,7 +231,7 @@ CVE-2026-53512
 | `nodock.showInProblems` | `true` | Souligner les vulnérabilités dans l'éditeur / onglet Problèmes |
 | `nodock.downgradeUnreachable` | `true` | Rétrograder d'un cran les vulnérabilités sans chemin de code détecté |
 
-## Développement
+## 🧑‍💻 Développement
 
 ```bash
 npm install
@@ -172,7 +245,7 @@ Le scan est annulable depuis la notification de progression. Une panne de l'API 
 n'interrompt pas l'analyse des secrets, du code et de la conformité : le rapport
 affiche un avertissement et le reste des résultats.
 
-## Roadmap
+## 🗺 Roadmap
 
 - [ ] App desktop (Tauri) Windows / Linux / macOS
 - [ ] Intégration Semgrep pour un SAST plus profond (analyse syntaxique)
@@ -185,6 +258,6 @@ affiche un avertissement et le reste des résultats.
 > Swift/Package.swift n'est volontairement pas couvert par le SCA : la base OSV
 > ne référence pas de manière fiable les bibliothèques Swift.
 
-## Licence
+## 📄 Licence
 
 MIT
