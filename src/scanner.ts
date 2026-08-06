@@ -12,6 +12,15 @@ import {
   scanStandardsInText,
   STANDARDS_FILE_TYPES,
 } from './standards';
+import {
+  AUDIT_FILE_TYPES,
+  auditFindings,
+  collectAuditSignals,
+  emptySignals,
+} from './audit';
+import { INFRA_FILE_TYPES, scanInfraInText } from './infra';
+import { aggregateAttack, ATTACK_FILE_TYPES, scanAttackInText } from './attack';
+import { aggregateWebSec, WEBSEC_FILE_TYPES, scanWebSecInText } from './websec';
 
 export interface FileScanResult {
   findings: Finding[];
@@ -120,10 +129,17 @@ export async function scanWorkspaceFiles(opts: {
       (SECRET_FILE_TYPES.test(u.fsPath) ||
         SAST_FILE_TYPES.test(u.fsPath) ||
         RGPD_FILE_TYPES.test(u.fsPath) ||
-        STANDARDS_FILE_TYPES.test(u.fsPath))
+        STANDARDS_FILE_TYPES.test(u.fsPath) ||
+        AUDIT_FILE_TYPES.test(u.fsPath) ||
+        WEBSEC_FILE_TYPES.test(u.fsPath) ||
+        INFRA_FILE_TYPES.test(u.fsPath) ||
+        ATTACK_FILE_TYPES.test(u.fsPath))
   );
 
   const findings: Finding[] = [];
+  // Signaux de posture, accumulés sur tout le projet : les protections absentes
+  // ne se voient qu'une fois l'ensemble parcouru.
+  const auditSignals = emptySignals();
   let filesScanned = 0;
   let skippedTooBig = 0;
   let skippedGenerated = uris.slice(0, maxFiles).filter((u) => isGeneratedPath(u.fsPath)).length;
@@ -180,10 +196,23 @@ export async function scanWorkspaceFiles(opts: {
         }
       }
 
+      if (AUDIT_FILE_TYPES.test(uri.fsPath)) {
+        collectAuditSignals(uri.fsPath, rel, text, auditSignals);
+      }
+
       const perFile: Finding[] = [];
       if (SECRET_FILE_TYPES.test(uri.fsPath)) perFile.push(...scanSecretsInText(text, rel));
       if (SAST_FILE_TYPES.test(uri.fsPath)) perFile.push(...scanCodeInText(uri.fsPath, rel, text));
       if (RGPD_FILE_TYPES.test(uri.fsPath)) perFile.push(...scanRgpdInText(uri.fsPath, rel, text));
+      if (WEBSEC_FILE_TYPES.test(uri.fsPath)) {
+        perFile.push(...scanWebSecInText(uri.fsPath, rel, text));
+      }
+      if (INFRA_FILE_TYPES.test(uri.fsPath)) {
+        perFile.push(...scanInfraInText(uri.fsPath, rel, text));
+      }
+      if (ATTACK_FILE_TYPES.test(uri.fsPath)) {
+        perFile.push(...scanAttackInText(uri.fsPath, rel, text));
+      }
       if (standardRules.length > 0 && STANDARDS_FILE_TYPES.test(uri.fsPath)) {
         perFile.push(...scanStandardsInText(uri.fsPath, rel, text, standardRules));
       }
@@ -208,10 +237,25 @@ export async function scanWorkspaceFiles(opts: {
   // Conformité et migrations se raisonnent à l'échelle du projet, pas du fichier.
   const compliance = findings.filter((f) => f.kind === 'rgpd');
   const standards = findings.filter((f) => f.kind === 'standards');
-  const rest = findings.filter((f) => f.kind !== 'rgpd' && f.kind !== 'standards');
+  const websec = findings.filter((f) => f.kind === 'websec');
+  const attack = findings.filter((f) => f.kind === 'attack');
+  const rest = findings.filter(
+    (f) =>
+      f.kind !== 'rgpd' &&
+      f.kind !== 'standards' &&
+      f.kind !== 'websec' &&
+      f.kind !== 'attack'
+  );
 
   return {
-    findings: [...rest, ...aggregateStandards(standards), ...aggregateCompliance(compliance)],
+    findings: [
+      ...rest,
+      ...auditFindings(auditSignals),
+      ...aggregateAttack(attack),
+      ...aggregateWebSec(websec),
+      ...aggregateStandards(standards),
+      ...aggregateCompliance(compliance),
+    ],
     filesScanned,
     notes,
     evidence,

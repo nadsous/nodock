@@ -2,7 +2,7 @@
   "name": "nodock",
   "displayName": "Nodock",
   "description": "Scanner de vulnérabilités : dépendances (OSV), secrets, code (SAST) et actualités sécurité — directement dans VS Code.",
-  "version": "0.5.0",
+  "version": "0.6.0-alpha",
   "publisher": "nodock",
   "license": "MIT",
   "repository": {

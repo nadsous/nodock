@@ -136,6 +136,8 @@ export interface ScaResult {
   notes: string[];
   /** Versions installées (nom → version), pour conditionner les règles de normes. */
   installed: Map<string, string>;
+  /** Inventaire complet, pour l'export SBOM. */
+  components: Array<{ name: string; version: string; ecosystem: string }>;
 }
 
 /** Findings de dépendances sans avis de sécurité : cohérence de l'arbre. */
@@ -175,7 +177,9 @@ export async function scanDependencies(opts: {
     }
   }
 
-  if (deps.length === 0) return { findings: [], scanned: 0, notes, installed };
+  const components = deps.map((d) => ({ name: d.name, version: d.version, ecosystem: d.ecosystem }));
+
+  if (deps.length === 0) return { findings: [], scanned: 0, notes, installed, components };
 
   const hygiene = hygieneFindings(deps, declarations);
 
@@ -262,5 +266,5 @@ export async function scanDependencies(opts: {
     }
   }
 
-  return { findings, scanned: deps.length, notes, installed };
+  return { findings, scanned: deps.length, notes, installed, components };
 }

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ScanReport, Severity } from './types';
+import { toCycloneDx } from './sbom';
 
 const SARIF_LEVEL: Record<Severity, string> = {
   critical: 'error',
@@ -19,7 +20,7 @@ export function toSarif(report: ScanReport): object {
         tool: {
           driver: {
             name: 'Nodock',
-            version: '0.5.0',
+            version: '0.6.0-alpha',
             informationUri: 'https://github.com/nodock',
             rules: [
               ...new Set(report.findings.map((f) => f.id ?? 'nodock-finding')),
@@ -52,24 +53,36 @@ export async function exportReport(report: ScanReport): Promise<void> {
     [
       { label: 'JSON', description: 'Rapport brut Nodock' },
       { label: 'SARIF', description: 'Compatible GitHub Code Scanning / CI' },
+      { label: 'CycloneDX', description: 'SBOM : inventaire logiciel + vulnérabilités triées' },
     ],
     { placeHolder: 'Format d\'export du rapport Nodock' }
   );
   if (!choice) return;
 
+  const extension =
+    choice.label === 'SARIF' ? 'sarif' : choice.label === 'CycloneDX' ? 'cdx.json' : 'json';
+
   const uri = await vscode.window.showSaveDialog({
-    defaultUri: vscode.Uri.file(
-      `nodock-report.${choice.label === 'SARIF' ? 'sarif' : 'json'}`
-    ),
+    defaultUri: vscode.Uri.file(`nodock-report.${extension}`),
     filters:
       choice.label === 'SARIF' ? { SARIF: ['sarif'] } : { JSON: ['json'] },
   });
   if (!uri) return;
 
+  const projectName = vscode.workspace.workspaceFolders?.[0]?.name ?? 'projet';
   const content =
     choice.label === 'SARIF'
       ? JSON.stringify(toSarif(report), null, 2)
-      : JSON.stringify(report, null, 2);
+      : choice.label === 'CycloneDX'
+        ? JSON.stringify(
+            toCycloneDx(report.components ?? [], report.findings, {
+              name: projectName,
+              version: '1.0.0',
+            }),
+            null,
+            2
+          )
+        : JSON.stringify(report, null, 2);
   await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
   vscode.window.showInformationMessage(`Nodock : rapport exporté → ${uri.fsPath}`);
 }

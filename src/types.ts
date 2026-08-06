@@ -16,7 +16,16 @@ export interface Triage {
 }
 
 export interface Finding {
-  kind: 'dependency' | 'secret' | 'sast' | 'rgpd' | 'standards';
+  kind:
+    | 'dependency'
+    | 'secret'
+    | 'sast'
+    | 'websec'
+    | 'infra'
+    | 'attack'
+    | 'rgpd'
+    | 'standards'
+    | 'audit';
   severity: Severity;
   title: string;
   description: string;
@@ -67,6 +76,8 @@ export interface ScanReport {
   notes: string[];
   /** true si le scan a été interrompu par l'utilisateur. */
   cancelled?: boolean;
+  /** Inventaire des dépendances installées, pour l'export SBOM. */
+  components?: Array<{ name: string; version: string; ecosystem: string }>;
 }
 
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
