@@ -268,19 +268,24 @@ export function getWebviewHtml(
     content: ''; flex: 1; height: 1px;
     background: linear-gradient(90deg, var(--border), transparent);
   }
+  /**
+   * La sévérité colore le contour ENTIER de la carte, en trait fin.
+   * Un liseré à gauche seulement se lisait mal une fois la liste dense : le
+   * contour complet rattache la couleur à la carte plutôt qu'à son bord.
+   */
   .finding {
-    background: var(--card); border: 1px solid var(--border);
-    border-left: 3px solid var(--border);
+    background: var(--card);
+    border: 1px solid var(--sev, var(--border));
     border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
     cursor: pointer;
     transition: transform .12s, border-color .2s, box-shadow .2s;
     animation: fadein .3s ease;
   }
   .finding:hover { transform: translateX(3px); box-shadow: 0 0 14px -6px var(--glow); }
-  .finding.critical { border-left-color: var(--critical); }
-  .finding.high { border-left-color: var(--high); }
-  .finding.medium { border-left-color: var(--medium); }
-  .finding.low, .finding.info { border-left-color: var(--low); }
+  .finding.critical { --sev: var(--critical); }
+  .finding.high { --sev: var(--high); }
+  .finding.medium { --sev: var(--medium); }
+  .finding.low, .finding.info { --sev: var(--low); }
   .finding .top { display: flex; align-items: flex-start; gap: 8px; }
   .morph { width: 16px; height: 16px; flex: none; margin-top: 1px; }
   .finding .title { font-size: 12px; font-weight: 600; line-height: 1.35; }
