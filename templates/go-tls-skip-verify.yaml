@@ -1,0 +1,13 @@
+id: NDK-GO-003
+info:
+  name: Vérification TLS désactivée (InsecureSkipVerify)
+  severity: critical
+  description: InsecureSkipVerify à true désactive la validation du certificat TLS, permettant à un attaquant sur le réseau de réaliser une attaque de l'homme du milieu et d'intercepter ou modifier le trafic chiffré en toute impunité.
+  remediation: Supprimez InsecureSkipVerify et validez toujours les certificats avec une autorité de confiance ; pour les environnements de test, utilisez un RootCAs dédié plutôt que de désactiver la vérification.
+  reference: https://cwe.mitre.org/data/definitions/295.html
+  tags: go, tls, crypto
+files: '\.go$'
+matchers:
+  - type: regex
+    pattern: 'InsecureSkipVerify\s*:\s*true'
+condition: or

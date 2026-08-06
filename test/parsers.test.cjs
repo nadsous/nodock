@@ -163,6 +163,79 @@ test('dedupe : la version issue du lockfile gagne sur celle du manifeste', () =>
 });
 
 // ---------------------------------------------------------------------------
+test('composer.lock : packages et packages-dev, préfixe v retiré', () => {
+  const lock = {
+    packages: [
+      { name: 'GuzzleHttp/Guzzle', version: 'v7.8.1' },
+      { name: 'monolog/monolog', version: '3.5.0' },
+    ],
+    'packages-dev': [{ name: 'phpunit/phpunit', version: '10.5.0' }],
+  };
+  const deps = P.parseComposerLock(lock, 'composer.lock');
+  assert.equal(deps.length, 3);
+  assert.equal(find(deps, 'guzzlehttp/guzzle').version, '7.8.1');
+  assert.equal(find(deps, 'guzzlehttp/guzzle').ecosystem, 'Packagist');
+  assert.equal(find(deps, 'guzzlehttp/guzzle').name, 'guzzlehttp/guzzle', 'noms en minuscules');
+  assert.equal(find(deps, 'phpunit/phpunit').version, '10.5.0');
+});
+
+test('Pipfile.lock : sections default et develop, == retiré', () => {
+  const lock = {
+    default: {
+      requests: { version: '==2.31.0' },
+      django: { version: '==4.2.7' },
+      local: { version: '==ref' },
+    },
+    develop: { pytest: { version: '==8.0.0' } },
+  };
+  const deps = P.parsePipfileLock(lock, 'Pipfile.lock');
+  assert.equal(deps.length, 3, 'les versions non numériques sont écartées');
+  assert.equal(find(deps, 'requests').version, '2.31.0');
+  assert.equal(find(deps, 'requests').ecosystem, 'PyPI');
+  assert.equal(find(deps, 'pytest').version, '8.0.0');
+});
+
+test('packages.lock.json (NuGet) : dépendances par target framework', () => {
+  const lock = {
+    version: 1,
+    dependencies: {
+      'net8.0': {
+        'Newtonsoft.Json': { type: 'Direct', resolved: '13.0.3' },
+        Dapper: { type: 'Direct', resolved: '2.1.24' },
+      },
+      'net8.0-windows': {
+        'Newtonsoft.Json': { type: 'Direct', resolved: '13.0.3' },
+      },
+    },
+  };
+  const deps = P.parseNugetLock(lock, 'packages.lock.json');
+  assert.equal(find(deps, 'Newtonsoft.Json').version, '13.0.3');
+  assert.equal(find(deps, 'Newtonsoft.Json').ecosystem, 'NuGet');
+  assert.equal(find(deps, 'Dapper').version, '2.1.24');
+});
+
+test('build.gradle : notation groupe:artefact:version, marquée imprécise', () => {
+  const gradle = `
+plugins {
+    id 'java'
+}
+dependencies {
+    implementation 'org.apache.logging.log4j:log4j-core:2.20.0'
+    api("com.fasterxml.jackson.core:jackson-databind:2.15.2")
+    testImplementation 'junit:junit:4.13.2'
+    implementation platform('org.junit:junit-bom:5.9.3')
+}
+`;
+  const deps = P.parseGradle(gradle, 'build.gradle');
+  const log4j = find(deps, 'org.apache.logging.log4j:log4j-core');
+  assert.equal(log4j.version, '2.20.0');
+  assert.equal(log4j.ecosystem, 'Maven');
+  assert.equal(log4j.imprecise, true, 'pas de lockfile Gradle → version de range');
+  assert.equal(find(deps, 'com.fasterxml.jackson.core:jackson-databind').version, '2.15.2');
+  assert.equal(find(deps, 'junit:junit').version, '4.13.2');
+});
+
+// ---------------------------------------------------------------------------
 test('secrets : un match ne masque pas ceux des lignes suivantes (bug lastIndex)', () => {
   // Le secret de la ligne 1 matche à un offset élevé ; avec une regex /g partagée,
   // l'ancien code reprenait la ligne 2 à cet offset et ratait le secret.
@@ -224,4 +297,94 @@ test('CVSS v3 : scores de référence', () => {
   assert.equal(cvss3BaseScore('CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N'), 0);
   // Vecteur illisible → null (on retombe sur la sévérité déclarée)
   assert.equal(cvss3BaseScore('CVSS:4.0/AV:N/AC:L'), null);
+});
+
+// ---------------------------------------------------------------------------
+// pyproject.toml — le manifeste des projets FastAPI/uv/Poetry. Sans lui, un
+// projet Python sans requirements.txt n'exposait aucune dépendance.
+// ---------------------------------------------------------------------------
+
+test('pyproject.toml : dépendances PEP 621, tableau multiligne', () => {
+  const toml = `
+[project]
+name = "mon-api"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.110.0,<1.0.0",
+  "uvicorn[standard]==0.29.0",   # serveur ASGI
+  "pydantic~=2.6",
+  "SQLAlchemy>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.0.0"]
+
+[build-system]
+requires = ["hatchling"]
+`;
+  const deps = P.parsePyproject(toml, 'pyproject.toml');
+  assert.equal(find(deps, 'fastapi').version, '0.110.0');
+  assert.equal(find(deps, 'fastapi').imprecise, true, 'un range n\'est pas une version installée');
+  assert.equal(find(deps, 'uvicorn').version, '0.29.0');
+  assert.equal(find(deps, 'uvicorn').imprecise, undefined, '== est exact');
+  assert.equal(find(deps, 'pydantic').version, '2.6');
+  assert.equal(find(deps, 'sqlalchemy').version, '2.0', 'nom normalisé en minuscules');
+  assert.equal(find(deps, 'pytest').version, '8.0.0', 'les extras sont lus aussi');
+  assert.equal(find(deps, 'hatchling'), undefined, 'build-system n\'est pas une dépendance');
+  assert.equal(deps.every((d) => d.ecosystem === 'PyPI'), true);
+});
+
+test('pyproject.toml : sections Poetry, y compris les groupes', () => {
+  const toml = `
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.110.0"
+httpx = "0.27.0"
+uvicorn = { version = "0.29.0", extras = ["standard"] }
+mon-lib = { path = "../mon-lib", develop = true }
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+`;
+  const deps = P.parsePyproject(toml, 'pyproject.toml');
+  assert.equal(find(deps, 'python'), undefined, 'l\'interpréteur n\'est pas un paquet');
+  assert.equal(find(deps, 'fastapi').version, '0.110.0');
+  assert.equal(find(deps, 'fastapi').imprecise, true);
+  assert.equal(find(deps, 'httpx').version, '0.27.0');
+  assert.equal(find(deps, 'httpx').imprecise, undefined, 'en Poetry une version nue est exacte');
+  assert.equal(find(deps, 'uvicorn').version, '0.29.0');
+  assert.equal(find(deps, 'mon-lib'), undefined, 'dépendance locale : rien à interroger');
+  assert.equal(find(deps, 'pytest').version, '8.0.0');
+});
+
+test('pyproject.toml : ni URL directe, ni version exclue, ni ligne commentée', () => {
+  const toml = `
+[project]
+dependencies = [
+  "paquet @ https://exemple.fr/paquet-1.0.0.tar.gz",
+  "requests!=2.31.0,>=2.30.0",
+  # "django==4.2.7",
+  "orjson",
+]
+`;
+  const deps = P.parsePyproject(toml, 'pyproject.toml');
+  assert.equal(find(deps, 'paquet'), undefined, 'archive épinglée : hors PyPI');
+  assert.equal(find(deps, 'requests').version, '2.30.0', 'la version exclue n\'est pas la bonne borne');
+  assert.equal(find(deps, 'django'), undefined, 'ligne commentée');
+  assert.equal(find(deps, 'orjson'), undefined, 'aucune contrainte : rien à tester');
+});
+
+test('pyproject.toml : groupes de dépendances PEP 735', () => {
+  const toml = `
+[dependency-groups]
+test = ["pytest==8.0.0", "httpx==0.27.0"]
+`;
+  const deps = P.parsePyproject(toml, 'pyproject.toml');
+  assert.equal(deps.length, 2);
+  assert.equal(find(deps, 'httpx').version, '0.27.0');
+});
+
+test('requirements.txt : les noms sont normalisés comme sur PyPI', () => {
+  const deps = P.parseRequirements('Flask_Login==0.6.3\n', 'requirements.txt');
+  assert.equal(deps[0].name, 'flask-login');
 });

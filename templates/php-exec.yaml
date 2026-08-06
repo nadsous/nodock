@@ -1,0 +1,13 @@
+id: NDK-PHP-002
+info:
+  name: Exécution de commande système
+  severity: high
+  description: exec, system, shell_exec, passthru ou popen avec des données externes permettent à un attaquant d'injecter des commandes shell et de prendre le contrôle du serveur web.
+  remediation: Utilisez escapeshellarg sur chaque argument et une liste blanche de commandes ; préférez des API PHP natives aux appels shell dès que possible.
+  reference: https://cwe.mitre.org/data/definitions/78.html
+  tags: php, injection
+files: '\.php$'
+matchers:
+  - type: regex
+    pattern: '\b(exec|system|shell_exec|passthru|popen)\s*\('
+condition: or

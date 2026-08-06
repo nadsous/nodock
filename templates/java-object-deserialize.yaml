@@ -1,0 +1,13 @@
+id: NDK-JAVA-005
+info:
+  name: Désérialisation Java native (ObjectInputStream)
+  severity: high
+  description: La désérialisation Java native avec ObjectInputStream sur des données non fiables permet l'exécution de code arbitraire via des chaînes de gadgets, une des vulnérabilités les plus exploitées de l'écosystème Java.
+  remediation: Préférez des formats sûrs comme JSON avec des schémas stricts ; si la désérialisation est inévitable, appliquez un ObjectInputFilter limitant les classes autorisées.
+  reference: https://cwe.mitre.org/data/definitions/502.html
+  tags: java, kotlin, deserialisation
+files: '\.(java|kt)$'
+matchers:
+  - type: regex
+    pattern: 'new\s+ObjectInputStream\s*\('
+condition: or

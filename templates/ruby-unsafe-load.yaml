@@ -1,0 +1,14 @@
+id: NDK-RB-002
+info:
+  name: Désérialisation non sûre (YAML.load / Marshal.load)
+  severity: high
+  description: YAML.load et Marshal.load instancient des objets arbitraires : sur des données externes, un attaquant peut déclencher l'exécution de code à distance via des objets piégés.
+  remediation: Utilisez YAML.safe_load avec permitted_classes explicites et évitez Marshal.load sur toute donnée externe ; préférez JSON.parse quand c'est possible.
+  reference: https://cwe.mitre.org/data/definitions/502.html
+  tags: ruby, deserialisation
+files: '\.rb$'
+matchers:
+  - type: regex
+    pattern: '\b(YAML\.load\s*\(|Marshal\.load)'
+exempt: 'safe_load|YAML\.load_file.*permitted'
+condition: or

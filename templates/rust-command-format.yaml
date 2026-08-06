@@ -1,0 +1,13 @@
+id: NDK-RS-001
+info:
+  name: Command::new avec chaîne formatée
+  severity: high
+  description: Passer une chaîne construite avec format! à Command::new ou à ses arguments permet à un attaquant d'injecter des commandes ou arguments arbitraires si la chaîne contient des données externes non validées.
+  remediation: Utilisez des arguments séparés via Command::arg avec des valeurs validées par liste blanche ; évitez de formater des entrées utilisateur dans le nom de la commande.
+  reference: https://cwe.mitre.org/data/definitions/78.html
+  tags: rust, injection
+files: '\.rs$'
+matchers:
+  - type: regex
+    pattern: 'Command::new\s*\(\s*(format!|&?format)'
+condition: or

@@ -1,0 +1,13 @@
+id: NDK-JAVA-001
+info:
+  name: Runtime.getRuntime().exec avec commande externe
+  severity: high
+  description: L'appel Runtime.getRuntime().exec avec une commande contenant des données externes permet à un attaquant d'exécuter des commandes arbitraires sur le serveur, compromettant totalement l'hôte.
+  remediation: Préférez ProcessBuilder avec des arguments séparés et une liste blanche stricte ; évitez de passer toute entrée utilisateur dans la ligne de commande.
+  reference: https://cwe.mitre.org/data/definitions/78.html
+  tags: java, kotlin, injection
+files: '\.(java|kt)$'
+matchers:
+  - type: regex
+    pattern: 'Runtime\.getRuntime\s*\(\s*\)\.exec\s*\('
+condition: or

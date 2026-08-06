@@ -3,12 +3,17 @@ import {
   dedupeDeps,
   dirOf,
   parseCargoToml,
+  parseComposerLock,
   parseGemfileLock,
   parseGoMod,
+  parseGradle,
+  parseNugetLock,
   parsePackageJson,
   parsePackageLock,
+  parsePipfileLock,
   parsePnpmLock,
   parsePom,
+  parsePyproject,
   parseRequirements,
   parseTomlPackageBlocks,
   parseYarnLock,
@@ -95,14 +100,32 @@ export async function collectDependencies(exclude: string[]): Promise<CollectRes
     return parseBunLock(text, rel);
   });
 
-  // --- 2. Lockfiles Rust / Python / Ruby ---
+  // --- 2. Lockfiles Rust / Python / Ruby / PHP / .NET ---
   await eachFile('**/Cargo.lock', 20, (rel, text) => {
     lock('crates.io', rel);
     return parseTomlPackageBlocks(text, rel, 'crates.io');
   });
-  await eachFile('**/poetry.lock', 20, (rel, text) => parseTomlPackageBlocks(text, rel, 'PyPI'));
-  await eachFile('**/uv.lock', 20, (rel, text) => parseTomlPackageBlocks(text, rel, 'PyPI'));
+  await eachFile('**/poetry.lock', 20, (rel, text) => {
+    lock('PyPI', rel);
+    return parseTomlPackageBlocks(text, rel, 'PyPI');
+  });
+  await eachFile('**/uv.lock', 20, (rel, text) => {
+    lock('PyPI', rel);
+    return parseTomlPackageBlocks(text, rel, 'PyPI');
+  });
+  await eachFile('**/Pipfile.lock', 20, (rel, text) => {
+    lock('PyPI', rel);
+    return parsePipfileLock(JSON.parse(text), rel);
+  });
   await eachFile('**/Gemfile.lock', 20, (rel, text) => parseGemfileLock(text, rel));
+  await eachFile('**/composer.lock', 20, (rel, text) => {
+    lock('Packagist', rel);
+    return parseComposerLock(JSON.parse(text), rel);
+  });
+  await eachFile('**/packages.lock.json', 20, (rel, text) => {
+    lock('NuGet', rel);
+    return parseNugetLock(JSON.parse(text), rel);
+  });
 
   // --- 3. Manifestes (seulement là où aucun lockfile n'a répondu) ---
   await eachFile('**/package.json', 50, (rel, text) => {
@@ -115,9 +138,17 @@ export async function collectDependencies(exclude: string[]): Promise<CollectRes
   await eachFile('**/Cargo.toml', 20, (rel, text) =>
     isLocked('crates.io', rel) ? [] : parseCargoToml(text, rel)
   );
+  // requirements*.txt épingle des versions exactes : lu même à côté d'un lock,
+  // il n'introduit pas de version fantôme. pyproject.toml ne donne que des
+  // ranges, donc uniquement là où aucun lockfile Python n'a répondu.
   await eachFile('**/requirements*.txt', 20, (rel, text) => parseRequirements(text, rel));
+  await eachFile('**/pyproject.toml', 20, (rel, text) =>
+    isLocked('PyPI', rel) ? [] : parsePyproject(text, rel)
+  );
   await eachFile('**/go.mod', 20, (rel, text) => parseGoMod(text, rel));
   await eachFile('**/pom.xml', 20, (rel, text) => parsePom(text, rel));
+  await eachFile('**/build.gradle', 20, (rel, text) => parseGradle(text, rel));
+  await eachFile('**/build.gradle.kts', 20, (rel, text) => parseGradle(text, rel));
 
   const all = dedupeDeps(found);
   const deps = all.slice(0, MAX_DEPS);

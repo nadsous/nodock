@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import { getWebviewHtml } from './webview';
+import { loadMorphiconsSource } from './morphicons-host';
+import { loadLucideIcons } from './icons';
 import { scanDependencies } from './sca';
 import { scanWorkspaceFiles } from './scanner';
 import { legalChecklistFindings } from './rgpd';
@@ -17,6 +19,8 @@ import {
   VERDICT_ORDER,
 } from './triage';
 import { Finding, ScanReport, SEVERITY_ORDER } from './types';
+import { loadTemplates } from './template-loader';
+import { computeScore } from './score';
 
 class NodockPanelProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -32,7 +36,12 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
     this.view = view;
     view.webview.options = { enableScripts: true };
     const nonce = createNonce();
-    view.webview.html = getWebviewHtml(view.webview, nonce);
+    view.webview.html = getWebviewHtml(
+      view.webview,
+      nonce,
+      loadMorphiconsSource(this.context),
+      loadLucideIcons()
+    );
 
     view.webview.onDidReceiveMessage(async (msg) => {
       switch (msg.command) {
@@ -75,6 +84,7 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
       rssFeeds: cfg.get<string[]>('rssFeeds', []),
       showInProblems: cfg.get<boolean>('showInProblems', true),
       downgradeUnreachable: cfg.get<boolean>('downgradeUnreachable', true),
+      templatePaths: cfg.get<string[]>('templatePaths', []),
     };
   }
 
@@ -86,7 +96,7 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
     if (this.scanning) return;
     this.scanning = true;
 
-    const { exclude, maxFileSizeKB, maxFiles } = this.config();
+    const { exclude, maxFileSizeKB, maxFiles, templatePaths } = this.config();
     this.post({ type: 'scanStart', step: 'Démarrage du scan…' });
 
     try {
@@ -125,6 +135,10 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
           // --- Fichiers : secrets + SAST + conformité en un seul passage ---
           // Les sondes issues des avis sont recherchées pendant cette lecture,
           // pour savoir si le code atteint réellement les API vulnérables.
+          step('Chargement des templates YAML…');
+          const loaded = await loadTemplates(this.context, templatePaths);
+          notes.push(...loaded.notes);
+
           step('Analyse des fichiers (secrets, code, conformité)…');
           let filesScanned = 0;
           let evidence: CodeEvidence = emptyEvidence();
@@ -135,6 +149,7 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
               maxFiles,
               probes: findings.map((f) => f.probe).filter((p) => p !== undefined),
               installed,
+              templates: loaded.templates,
               token,
               onProgress: step,
             });
@@ -183,6 +198,11 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
           const count = (s: string): number =>
             findings.filter((f) => f.severity === s).length;
 
+          // Le score se compare d'un scan à l'autre : progression ou régression.
+          const previousScore = this.context.workspaceState.get<number>('nodock.lastScore');
+          const score = computeScore(findings);
+          void this.context.workspaceState.update('nodock.lastScore', score);
+
           return {
             generatedAt: new Date().toISOString(),
             findings,
@@ -197,6 +217,8 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
             notes,
             cancelled: token.isCancellationRequested,
             components,
+            score,
+            previousScore,
           } satisfies ScanReport;
         }
       );
@@ -235,7 +257,7 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
       vscode.window.showWarningMessage('Nodock : lancez d\'abord un scan.');
       return;
     }
-    await exportReport(this.lastReport);
+    await exportReport(this.lastReport, this.context.extension.packageJSON?.version ?? 'dev');
   }
 
   async refreshNews(): Promise<void> {

@@ -24,6 +24,20 @@ const NEXT_PAGES_ROUTE = /[\\/]pages[\\/]api[\\/].*\.[jt]sx?$/i;
 const NEST_CONTROLLER = /\.controller\.[jt]s$/i;
 /** Express / Fastify / Hono : un routeur déclaré dans le fichier. */
 const EXPRESS_ROUTE = /\b(router|app)\.(get|post|put|patch|delete|all)\s*\(/;
+/** Flask / FastAPI : décorateurs de route (`@app.get`, `@router.post`…). */
+const PY_ROUTE =
+  /^\s*@[\w.]+\.(route|get|post|put|patch|delete|head|options|trace|websocket|api_route)\s*\(/m;
+/** Django : les routes vivent dans urls.py (path/re_path). */
+const DJANGO_URLS = /(^|[\\/])urls\.py$/i;
+const DJANGO_ROUTE = /\b(path|re_path)\s*\(\s*['"]/;
+/** Laravel : Route::get/post/… */
+const LARAVEL_ROUTE = /\bRoute::(get|post|put|patch|delete|any|match|resource|apiResource)\s*\(/;
+/** Spring : @GetMapping, @RequestMapping… */
+const SPRING_ROUTE = /@(Get|Post|Put|Delete|Patch|Request)Mapping\b/;
+
+const PY_FILE = /\.py$/i;
+const PHP_FILE = /\.php$/i;
+const JVM_FILE = /\.(java|kt)$/i;
 
 /** Le fichier expose-t-il une route HTTP ? */
 function isRouteFile(fsPath: string, text: string): boolean {
@@ -31,17 +45,47 @@ function isRouteFile(fsPath: string, text: string): boolean {
     NEXT_APP_ROUTE.test(fsPath) ||
     NEXT_PAGES_ROUTE.test(fsPath) ||
     NEST_CONTROLLER.test(fsPath) ||
-    EXPRESS_ROUTE.test(text)
+    EXPRESS_ROUTE.test(text) ||
+    (PY_FILE.test(fsPath) &&
+      (PY_ROUTE.test(text) || (DJANGO_URLS.test(fsPath) && DJANGO_ROUTE.test(text)))) ||
+    (PHP_FILE.test(fsPath) && LARAVEL_ROUTE.test(text)) ||
+    (JVM_FILE.test(fsPath) && SPRING_ROUTE.test(text))
   );
 }
 
-/** Vérification d'identité, tous frameworks confondus. */
+/**
+ * Vérification d'identité, tous frameworks confondus.
+ *
+ * FastAPI la déclare par injection de dépendance plutôt que par un appel dans
+ * le corps du handler. `Depends(...)` seul ne prouve rien — il sert aussi à
+ * injecter une session de base — donc seules les dépendances dont le nom
+ * évoque l'identité comptent, ainsi que `Security(...)` et les schémas
+ * d'authentification, qui n'existent que pour cela.
+ */
 const AUTH_CHECK =
-  /getServerSession|getServerAuthSession|\bauth\s*\(\s*\)|getToken\s*\(|requireAuth|verifyToken|verifyJwt|@UseGuards|isAuthenticated|currentUser|getCurrentUser|withAuth|authMiddleware|getAuth\s*\(|clerkClient|session\s*[?.]|ensureLoggedIn|checkPermission|authorize\s*\(/i;
+  /getServerSession|getServerAuthSession|\bauth\s*\(\s*\)|getToken\s*\(|requireAuth|verifyToken|verifyJwt|@UseGuards|isAuthenticated|currentUser|getCurrentUser|withAuth|authMiddleware|getAuth\s*\(|clerkClient|ensureLoggedIn|checkPermission|authorize\s*\(|login_required|permission_classes|Auth::check|auth\(\)->|middleware\(['"]auth|@PreAuthorize|SecurityContextHolder|RequiresAuthentication|Depends\s*\(\s*[\w.]*(current_user|current_active_user|get_user|auth|token|admin|permission|scope|api_?key|require)[\w.]*\s*\)|\bSecurity\s*\(|OAuth2PasswordBearer|OAuth2AuthorizationCodeBearer|HTTPBearer|HTTPBasic|HTTPDigest|APIKey(Header|Query|Cookie)|fastapi_users/i;
 
-/** Accès à une base de données. */
+/**
+ * `session?.user` désigne une session d'authentification en JS/TS — mais en
+ * Python `session.` est la session SQLAlchemy injectée dans le handler. Prendre
+ * l'une pour l'autre déclarait authentifiée toute route FastAPI touchant la
+ * base, c'est-à-dire exactement celles qu'il faut examiner.
+ */
+const JS_SESSION = /session\s*[?.]/i;
+
+/** Le fichier vérifie-t-il l'identité de l'appelant ? */
+function checksAuth(fsPath: string, text: string): boolean {
+  if (AUTH_CHECK.test(text)) return true;
+  return !PY_FILE.test(fsPath) && JS_SESSION.test(text);
+}
+
+/**
+ * Accès à une base de données.
+ * Côté FastAPI, la session SQLAlchemy est injectée sous un nom libre
+ * (`session`, `conn`) : ce sont ses méthodes qui la trahissent.
+ */
 const DB_ACCESS =
-  /\bprisma\s*\.|\bdb\s*\.|mongoose|\bknex\s*\(|drizzle|supabase|createClient|\.findMany\s*\(|\.findUnique\s*\(|\.aggregate\s*\(|sql`|\.query\s*\(/i;
+  /\bprisma\s*\.|\bdb\s*\.|mongoose|\bknex\s*\(|drizzle|supabase|createClient|\.findMany\s*\(|\.findUnique\s*\(|\.aggregate\s*\(|sql`|\.query\s*\(|\.objects\.(filter|get|all|create)|db\.session|cursor\s*\(|\bDB::|Eloquent|EntityManager|@Query\b|JpaRepository|findAll\s*\(|\bAsyncSession\b|\bsession\.(execute|scalar|scalars|add|delete|merge|commit)\s*\(|\.scalars\s*\(|\btext\s*\(\s*f?['"]\s*(SELECT|INSERT|UPDATE|DELETE)/i;
 
 /**
  * Lecture d'une donnée contrôlée par l'appelant.
@@ -49,7 +93,40 @@ const DB_ACCESS =
  * contenant une clé `params`, et signalait des routes qui ne lisent rien.
  */
 const USER_INPUT =
-  /\breq(uest)?\.(body|query|params)\b|\brequest\.(json|formData|text)\s*\(|\bsearchParams\.(get|getAll|has)\s*\(|\bawait\s+req\.(json|formData|text)\s*\(|\bparams\.\w+/;
+  /\breq(uest)?\.(body|query|params)\b|\brequest\.(json|formData|text)\s*\(|\bsearchParams\.(get|getAll|has)\s*\(|\bawait\s+req\.(json|formData|text)\s*\(|\bparams\.\w+|\brequest\.(POST|GET|data|args|form|files|json)\b|\$_(GET|POST|REQUEST|FILES|COOKIE)|request\(\)->(input|query|all)|@(RequestBody|RequestParam|ModelAttribute|PathVariable)\b/;
+
+/**
+ * Entrée utilisateur à la mode FastAPI : elle n'est pas LUE dans le corps du
+ * handler, elle est DÉCLARÉE dans sa signature. `USER_INPUT` cherche un accès
+ * (`request.args`) que ce framework n'utilise justement pas — sans ces motifs,
+ * une API FastAPI apparaît comme ne lisant jamais rien.
+ */
+const FASTAPI_PARAM =
+  /[:=]\s*(Query|Body|Path|Form|File|Header|Cookie)\s*\(|Annotated\s*\[[^\]]*\b(Query|Body|Path|Form|File|Header|Cookie)\s*\(|\bUploadFile\b/;
+
+/** Paramètre de chemin déclaré dans le décorateur : `@app.get("/items/{id}")`. */
+const FASTAPI_PATH_PARAM =
+  /@[\w.]+\.(route|get|post|put|patch|delete|head|options|websocket|api_route)\s*\(\s*f?['"][^'"]*\{\w+\}/;
+
+/** Modèles de corps de requête déclarés dans le fichier. */
+const PYDANTIC_MODEL = /^\s*class\s+(\w+)\s*\([^)]*\b(BaseModel|SQLModel|BaseSettings)\b/gm;
+
+/**
+ * Le fichier lit-il une donnée fournie par l'appelant ?
+ * Pour FastAPI, on relève les modèles Pydantic définis dans le fichier puis on
+ * cherche un paramètre ainsi annoté : `def creer(article: ArticleIn)` reçoit le
+ * corps de la requête, aussi sûrement qu'un `req.body`.
+ */
+function readsUserInput(fsPath: string, text: string): boolean {
+  if (USER_INPUT.test(text)) return true;
+  if (!PY_FILE.test(fsPath)) return false;
+  if (FASTAPI_PARAM.test(text) || FASTAPI_PATH_PARAM.test(text)) return true;
+
+  const models = [...text.matchAll(PYDANTIC_MODEL)].map((m) => m[1]);
+  if (models.length === 0) return false;
+  const asParam = new RegExp(String.raw`[(,]\s*\w+\s*:\s*(?:${models.join('|')})\b`);
+  return asParam.test(text);
+}
 
 /**
  * Validation d'entrée — bibliothèque de schéma OU garde manuelle explicite.
@@ -57,21 +134,42 @@ const USER_INPUT =
  * valable : ne pas la reconnaître produisait de faux reproches.
  */
 const VALIDATION =
-  /\bz\s*\.\s*(object|string|number)|zodResolver|\bjoi\.|\byup\.|class-validator|ValidationPipe|valibot|\bajv\b|\.safeParse\s*\(|\.parse\s*\(|isValidObjectId|isUUID|isEmail|\bvalidator\./i;
+  /\bz\s*\.\s*(object|string|number)|zodResolver|\bjoi\.|\byup\.|class-validator|ValidationPipe|valibot|\bajv\b|\.safeParse\s*\(|\.parse\s*\(|isValidObjectId|isUUID|isEmail|\bvalidator\.|is_valid\s*\(|BaseModel|forms\.(Form|ModelForm)|->validate\s*\(|FormRequest|@Valid\b|@Validated|pydantic|Serializer\b|\bSQLModel\b|TypeAdapter|field_validator|model_validator|\bcon(str|int|float|list)\s*\(/i;
 
 /** Limitation de débit. */
 const RATE_LIMIT =
-  /rate-?limit|ratelimit|Throttler|@upstash\/ratelimit|express-rate-limit|slowDown|bottleneck/i;
+  /rate-?limit|ratelimit|Throttler|@upstash\/ratelimit|express-rate-limit|slowDown|bottleneck|flask.?limiter|Limiter\s*\(|@ratelimit|throttle\s*:|RateLimiter|bucket4j|\bslowapi\b|@limiter\.|fastapi[-_]?limiter/i;
 
-/** En-têtes de sécurité. */
+/**
+ * En-têtes de sécurité.
+ * Starlette/FastAPI ne les pose pas par défaut : ils viennent d'un middleware
+ * (`secure`, un middleware maison) ou d'un ajout explicite sur la réponse.
+ */
 const SECURITY_HEADERS =
-  /Content-Security-Policy|Strict-Transport-Security|X-Frame-Options|helmet\s*\(|X-Content-Type-Options|Referrer-Policy/i;
+  /Content-Security-Policy|Strict-Transport-Security|X-Frame-Options|helmet\s*\(|X-Content-Type-Options|Referrer-Policy|SecurityHeaders|HTTPSRedirectMiddleware|\bsecure\.Secure\b/i;
+
+/**
+ * Garde appliquée à un routeur entier plutôt qu'à chaque route.
+ * FastAPI permet `include_router(..., dependencies=[Depends(auth)])` : les
+ * handlers du module ne portent alors aucune trace de vérification, alors
+ * qu'ils sont bel et bien protégés.
+ */
+const GLOBAL_ROUTE_GUARD =
+  /(include_router|APIRouter|FastAPI)\s*\([^)]*dependencies\s*=|AuthenticationMiddleware|add_middleware\s*\(\s*[\w.]*Auth\w*/;
 
 /** Protection CSRF. */
 const CSRF = /csrf|csurf|sameSite\s*:\s*['"](strict|lax)['"]/i;
 
 /** Route sensible : c'est là que la limitation de débit compte vraiment. */
 const AUTH_ROUTE = /[\\/](login|signin|sign-in|register|signup|sign-up|auth|password|reset|forgot|token|otp|verify)[\\/\\.]/i;
+
+/**
+ * En Python/PHP/Java le chemin de la route est dans le code (décorateur,
+ * Route::…, path(…)), pas dans le nom du fichier : on y cherche les mêmes
+ * mots-clés sensibles.
+ */
+const AUTH_ROUTE_CODE =
+  /(@\w+\.(route|get|post|put)\s*\(\s*['"][^'"]*|Route::(get|post|put)\s*\(\s*['"][^'"]*|\bpath\s*\(\s*['"][^'"]*|@(Get|Post)Mapping\s*\(\s*["'][^"']*)(login|sign-?in|register|sign-?up|password|reset|forgot|token|otp|verify)/i;
 
 // ---------------------------------------------------------------------------
 
@@ -90,6 +188,8 @@ export interface AuditSignals {
   hasSecurityHeaders: boolean;
   hasCsrf: boolean;
   hasValidationLib: boolean;
+  /** Une garde d'authentification est posée sur un routeur entier. */
+  hasGlobalRouteGuard: boolean;
   /** Fichiers d'environnement trouvés (hors .example). */
   envFiles: string[];
   /** Clés privées, certificats, jetons de registre trouvés dans l'arborescence. */
@@ -112,6 +212,7 @@ export function emptySignals(): AuditSignals {
     hasSecurityHeaders: false,
     hasCsrf: false,
     hasValidationLib: false,
+    hasGlobalRouteGuard: false,
     envFiles: [],
     sensitiveFiles: [],
     gitignore: '',
@@ -122,7 +223,7 @@ export function emptySignals(): AuditSignals {
 export const AUDIT_FILE_TYPES = new RegExp(
   [
     String.raw`(^|[\\/])(\.gitignore|next\.config\.\w+|middleware\.[jt]s|nuxt\.config\.\w+|vite\.config\.\w+|\.env[\w.]*)$`,
-    String.raw`\.([jt]sx?|mjs|cjs)$`,
+    String.raw`\.([jt]sx?|mjs|cjs|py|php|java|kt)$`,
     SENSITIVE_FILE.source,
   ].join('|'),
   'i'
@@ -156,15 +257,16 @@ export function collectAuditSignals(
   if (SECURITY_HEADERS.test(text)) signals.hasSecurityHeaders = true;
   if (CSRF.test(text)) signals.hasCsrf = true;
   if (VALIDATION.test(text)) signals.hasValidationLib = true;
+  if (GLOBAL_ROUTE_GUARD.test(text)) signals.hasGlobalRouteGuard = true;
 
   if (isRouteFile(fsPath, text)) {
     signals.routes.push({
       file: relPath,
-      hasAuth: AUTH_CHECK.test(text),
+      hasAuth: checksAuth(fsPath, text),
       touchesDb: DB_ACCESS.test(text),
-      readsInput: USER_INPUT.test(text),
+      readsInput: readsUserInput(fsPath, text),
       validates: VALIDATION.test(text),
-      isAuthRoute: AUTH_ROUTE.test(relPath),
+      isAuthRoute: AUTH_ROUTE.test(relPath) || AUTH_ROUTE_CODE.test(text),
     });
   }
 }
@@ -255,13 +357,21 @@ export function auditFindings(signals: AuditSignals): Finding[] {
   // --- Routes sans contrôle d'accès ---
   const unauth = routes.filter((r) => !r.hasAuth && r.touchesDb);
   if (unauth.length > 0) {
+    // Une garde posée sur un routeur entier protège des handlers qui n'en
+    // portent aucune trace : le constat reste utile à vérifier, mais l'annoncer
+    // comme « high » serait un reproche que le code ne mérite peut-être pas.
+    const guarded = signals.hasGlobalRouteGuard;
     out.push(
       finding(
         'NDK-AUD-003',
-        'high',
+        guarded ? 'medium' : 'high',
         `${unauth.length} route(s) accèdent à la base sans vérification d'identité`,
         'Ces routes interrogent ou modifient la base sans qu\'aucune vérification de session ne soit détectée. ' +
           'Certaines sont peut-être publiques à dessein (catalogue, santé, webhook signé) — mais chacune mérite d\'être confirmée.\n\n' +
+          (guarded
+            ? '⚠️ Une garde a été détectée au niveau d\'un routeur (`dependencies=[Depends(…)]`, middleware d\'authentification). ' +
+              'Si elle couvre ces routes, elles sont protégées et ce constat est à écarter — vérifiez le rattachement de chaque routeur.\n\n'
+            : '') +
           `**Routes**\n${list(unauth.map((r) => r.file))}\n\n` +
           '**À faire**\n1. Pour chacune : cette donnée doit-elle être lisible/modifiable sans être connecté ?\n' +
           '2. Si non, ajoutez la vérification de session en TOUT DÉBUT de handler.\n' +
@@ -283,7 +393,7 @@ export function auditFindings(signals: AuditSignals): Finding[] {
         'Ces routes lisent une donnée fournie par l\'appelant et l\'utilisent dans un accès base, sans schéma de validation détecté. ' +
           'C\'est le chemin classique vers l\'injection, la pollution de champs (mass assignment) et les accès indirects à des objets d\'autrui.\n\n' +
           `**Routes**\n${list(unvalidated.map((r) => r.file))}\n\n` +
-          '**À faire**\n1. Validez la forme des entrées avec un schéma (zod, joi, class-validator) dès l\'entrée du handler.\n' +
+          '**À faire**\n1. Validez la forme des entrées avec un schéma dès l\'entrée du handler (zod, joi, class-validator ; en Python, un modèle Pydantic).\n' +
           '2. N\'acceptez que les champs attendus — ne passez jamais le corps de requête entier à un `create`/`update`.\n' +
           '3. Vérifiez que l\'identifiant demandé appartient bien à l\'utilisateur courant.',
         unvalidated[0].file
@@ -323,7 +433,8 @@ export function auditFindings(signals: AuditSignals): Finding[] {
           '2. `Strict-Transport-Security: max-age=31536000; includeSubDomains`.\n' +
           '3. `X-Frame-Options: DENY` (ou `frame-ancestors` dans la CSP).\n' +
           '4. `X-Content-Type-Options: nosniff` et `Referrer-Policy: strict-origin-when-cross-origin`.\n\n' +
-          'En Next.js, cela se déclare dans `headers()` de `next.config`. Avec Express, via `helmet()`.'
+          'En Next.js, cela se déclare dans `headers()` de `next.config`. Avec Express, via `helmet()`. ' +
+          'Avec FastAPI/Starlette, rien n\'est posé par défaut : ajoutez un middleware (`@app.middleware("http")` qui complète `response.headers`, ou la bibliothèque `secure`).'
       )
     );
   }

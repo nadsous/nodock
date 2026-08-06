@@ -1,0 +1,13 @@
+id: NDK-CS-001
+info:
+  name: Process.Start avec chaîne littérale
+  severity: high
+  description: Process.Start avec un chemin ou des arguments incluant des données externes permet à un attaquant de lancer des programmes arbitraires ou de détourner la ligne de commande sur le serveur.
+  remediation: Validez le chemin de l'exécutable par liste blanche et utilisez ProcessStartInfo.ArgumentList (et non une chaîne Arguments concaténée) pour passer les paramètres.
+  reference: https://cwe.mitre.org/data/definitions/78.html
+  tags: csharp, injection
+files: '\.cs$'
+matchers:
+  - type: regex
+    pattern: '\bProcess\.Start\s*\(\s*(@?\$?")'
+condition: or

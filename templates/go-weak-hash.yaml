@@ -1,0 +1,13 @@
+id: NDK-GO-004
+info:
+  name: Fonction de hachage faible (MD5/SHA1)
+  severity: medium
+  description: MD5 et SHA-1 sont cassés cryptographiquement (collisions pratiques démontrées) ; leur usage pour des signatures, des mots de passe ou des jetons permet à un attaquant de forger des données ayant le même hachage.
+  remediation: Utilisez SHA-256 ou supérieur pour l'intégrité, et bcrypt, scrypt ou argon2 pour les mots de passe ; évitez MD5 et SHA-1 pour tout usage de sécurité.
+  reference: https://cwe.mitre.org/data/definitions/328.html
+  tags: go, crypto
+files: '\.go$'
+matchers:
+  - type: regex
+    pattern: '\b(md5|sha1)\.(New|Sum)\s*\('
+condition: or

@@ -1,0 +1,14 @@
+id: NDK-JAVA-003
+info:
+  name: Algorithme de hachage faible (MD5/SHA-1)
+  severity: medium
+  description: MessageDigest avec MD5 ou SHA-1 utilise des algorithmes cassés : un attaquant peut générer des collisions et forger des empreintes valides, invalidant signatures, jetons et contrôles d'intégrité.
+  remediation: Utilisez SHA-256 ou SHA-3 pour l'intégrité et bcrypt/argon2 pour les mots de passe ; évitez MD5 et SHA-1 dans tout contexte de sécurité.
+  reference: https://cwe.mitre.org/data/definitions/328.html
+  tags: java, kotlin, crypto
+files: '\.(java|kt)$'
+matchers:
+  - type: regex
+    pattern: 'MessageDigest\.getInstance\s*\(\s*"(MD5|SHA-?1)"'
+    flags: i
+condition: or

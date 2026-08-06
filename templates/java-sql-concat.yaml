@@ -1,0 +1,13 @@
+id: NDK-JAVA-002
+info:
+  name: Requête SQL avec concaténation
+  severity: high
+  description: Concaténer des variables dans une requête SQL passée à executeQuery ou executeUpdate permet à un attaquant d'injecter du SQL arbitraire, exposant ou détruisant les données de la base.
+  remediation: Utilisez PreparedStatement avec des paramètres liés (?) pour toute valeur variable ; évitez la concaténation de chaînes dans les requêtes SQL.
+  reference: https://cwe.mitre.org/data/definitions/89.html
+  tags: java, kotlin, injection, sql
+files: '\.(java|kt)$'
+matchers:
+  - type: regex
+    pattern: '\.execute(Query|Update)?\s*\([^)]*\+'
+condition: or

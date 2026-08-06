@@ -1,6 +1,68 @@
 # 🛡️ Nodock — Release Notes
 
-## [Unreleased] — 2026-08-05
+## [0.7.0-alpha] — 2026-08-06
+
+### ✨ Templates YAML : créez vos propres règles de vulnérabilités
+
+Nodock charge désormais des **templates YAML** décrivant des règles de détection :
+format simple (`id`, `info`, `files`, `matchers` regex/mots, `condition` or/and,
+`exempt`, `multiline`), parseur maison **sans aucune dépendance**, garde-fous
+hérités (commentaires ignorés, fenêtre d'exemption, plafond anti-bruit, triage,
+baseline, exports).
+
+- **Emplacements** : templates embarqués, `.nodock/templates/` du projet
+  (chargé automatiquement), chemins additionnels via `nodock.templatePaths`.
+  Un template utilisateur qui reprend l'`id` d'un embarqué le remplace ; un
+  template invalide produit une note non bloquante, jamais un crash.
+- **~20 templates embarqués** ouvrent le support de **Go, Rust, Java/Kotlin,
+  PHP, Ruby et C#** : `exec.Command`, SQL formaté, `InsecureSkipVerify`,
+  MD5/SHA1, `Runtime.exec`, `ObjectInputStream`, `eval`/`unserialize` PHP,
+  `YAML.load`/`Marshal.load` Ruby, `BinaryFormatter`…
+
+### 🌍 Multi-langage de bout en bout
+
+- **Triage d'atteignabilité** étendu au-delà de JS/Python : extraction des
+  imports Go (module complet = nom OSV), Rust (`use`/`extern crate`, `_`↔`-`),
+  Java/Kotlin (préfixe de groupe Maven), PHP (`use Vendor\Package` → Packagist),
+  Ruby (`require`), C# (`using` → NuGet). Une CVE sur une dep Go ou Maven peut
+  désormais être jugée « exploitable ».
+- **SCA** : nouveaux lockfiles `composer.lock` (Packagist), `Pipfile.lock`
+  (PyPI), `packages.lock.json` (NuGet) et manifestes `build.gradle(.kts)`
+  (Maven, marqués imprécis). Swift volontairement exclu (pas d'écosystème OSV
+  fiable).
+- **Audit de posture** : routes recensées aussi pour **Django** (`urls.py`),
+  **Flask/FastAPI** (décorateurs), **Laravel** (`Route::…`), **Spring**
+  (`@GetMapping`…) ; rate-limit reconnu pour flask-limiter, django-ratelimit,
+  throttle Laravel, bucket4j…
+
+### 🐛 Corrections
+
+- **SBOM CycloneDX** : le purl `affects` portait `npm` **en dur** pour toutes
+  les vulnérabilités — il utilise désormais l'écosystème réel du paquet
+  (fallback : composant installé du même nom). purl canoniques à namespace pour
+  Go et Packagist.
+- **Versions hardcodées** : SARIF et CycloneDX portent la version réelle de
+  l'extension (lue du `package.json`).
+- **Score /100 pondéré par le triage** : une faille « exploitable » pèse 5× plus
+  qu'une « aucun chemin détecté » (`score.ts`). Le panneau affiche le **delta
+  vs scan précédent** (persisté en `workspaceState`).
+
+### 🧰 Divers
+
+- Flux RSS par défaut : The Hacker News **+ avis CISA**.
+- `npm run test:smoke` câble les tests réseau réels (OSV/NVD/RSS).
+- Interface du panneau refaite (icônes SVG animées, thème VS Code respecté).
+
+### ✅ Tests
+
+- Nouveaux : `test/templates.test.cjs` (parseur YAML, moteur, templates
+  embarqués valides), `test/score.test.cjs`, `test/sbom.test.cjs` (régression
+  purl). Étendus : parseurs (composer/Pipfile/NuGet/Gradle), imports
+  multi-langage, routes Python/PHP/Java.
+
+---
+
+## [0.6.0-alpha] — 2026-08-05
 
 ### ✨ Nouveau module : Vecteurs d'attaque (`kind: 'attack'`)
 

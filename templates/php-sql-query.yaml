@@ -1,0 +1,13 @@
+id: NDK-PHP-003
+info:
+  name: Requête SQL via mysql_query/mysqli_query
+  severity: high
+  description: mysql_query et mysqli_query sont fréquemment utilisées avec des chaînes concaténées, exposant l'application à l'injection SQL : un attaquant peut lire, modifier ou supprimer toute la base de données.
+  remediation: Utilisez PDO avec des requêtes préparées (prepare + execute) et des paramètres liés ; évitez toute concaténation de variables dans le SQL.
+  reference: https://cwe.mitre.org/data/definitions/89.html
+  tags: php, injection, sql
+files: '\.php$'
+matchers:
+  - type: regex
+    pattern: '\b(mysql_query|mysqli_query)\s*\('
+condition: or

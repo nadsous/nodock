@@ -143,7 +143,22 @@ export function triageDependency(
     return { verdict: 'a-verifier', reasons: ['Aucune source analysable : atteignabilité non évaluée.'] };
   }
 
-  const imported = probe ? evidence.packages.has(probe.pkg) : false;
+  // Le paquet est-il importé quelque part ? Les conventions varient :
+  // - Maven/NuGet : l'avis nomme 'groupe:artefact', le code importe 'groupe.module' ;
+  // - Go : l'avis nomme le module, le code peut importer un sous-chemin 'mod/sub' ;
+  // - C# : l'avis nomme 'Newtonsoft.Json', le code fait 'using Newtonsoft'.
+  const group = probe?.pkg.includes(':') ? probe.pkg.split(':')[0] : undefined;
+  const keys = [probe?.pkg ?? '', ...(group ? [group] : [])];
+  const imported = probe
+    ? keys.some((k) => evidence.packages.has(k)) ||
+      (probe.pkg.includes('/') &&
+        [...evidence.packages].some((p) => p.startsWith(`${probe.pkg}/`))) ||
+      (group !== undefined &&
+        [...evidence.packages].some((p) => p === group || p.startsWith(`${group}.`))) ||
+      (probe.pkg.includes('.') &&
+        !probe.pkg.includes('/') &&
+        evidence.packages.has(probe.pkg.split('.')[0]))
+    : false;
 
   if (!imported) {
     reasons.push(
@@ -164,7 +179,9 @@ export function triageDependency(
   const distinctive = (probe?.symbols ?? []).filter(isDistinctiveSymbol);
   const generic = (probe?.symbols ?? []).filter((s) => !isDistinctiveSymbol(s));
 
-  const found = evidence.symbolsByPackage.get(probe?.pkg ?? '') ?? new Set<string>();
+  const found = new Set<string>(
+    keys.flatMap((k) => [...(evidence.symbolsByPackage.get(k) ?? [])])
+  );
   const usedSubpaths = subpaths.filter((s) => evidence.specifiers.has(s));
   const usedDistinctive = distinctive.filter((s) => found.has(s));
 

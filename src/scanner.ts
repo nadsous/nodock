@@ -21,6 +21,7 @@ import {
 import { INFRA_FILE_TYPES, scanInfraInText } from './infra';
 import { aggregateAttack, ATTACK_FILE_TYPES, scanAttackInText } from './attack';
 import { aggregateWebSec, WEBSEC_FILE_TYPES, scanWebSecInText } from './websec';
+import { scanTemplatesInText, Template, templateFileTypes } from './templates';
 
 export interface FileScanResult {
   findings: Finding[];
@@ -31,7 +32,7 @@ export interface FileScanResult {
 }
 
 /** Fichiers dans lesquels chercher les imports (code applicatif). */
-const SOURCE_FILES = /\.([jt]sx?|mjs|cjs|vue|svelte|py)$/i;
+const SOURCE_FILES = /\.([jt]sx?|mjs|cjs|vue|svelte|py|go|rs|java|kt|php|rb|cs)$/i;
 
 /** Garde-fou : au-delà, la recherche de symboles coûterait plus qu'elle ne rapporte. */
 const MAX_SYMBOLS = 200;
@@ -80,6 +81,8 @@ export async function scanWorkspaceFiles(opts: {
   probes?: TriageProbe[];
   /** Versions installées, pour n'activer que les règles de normes pertinentes. */
   installed?: Map<string, string>;
+  /** Templates YAML (embarqués + projet), appliqués dans le même passage. */
+  templates?: Template[];
   token?: vscode.CancellationToken;
   onProgress?: (message: string) => void;
 }): Promise<FileScanResult> {
@@ -89,6 +92,7 @@ export async function scanWorkspaceFiles(opts: {
     maxFiles,
     probes = [],
     installed = new Map<string, string>(),
+    templates = [],
     token,
     onProgress,
   } = opts;
@@ -106,8 +110,21 @@ export async function scanWorkspaceFiles(opts: {
     const merged = [...new Set([...existing, ...p.symbols])].slice(0, budget);
     budget -= merged.length - existing.length;
     probesByPackage.set(p.pkg, merged);
+    // Maven/NuGet : les imports Java/C# sont pointés ('org.apache.x'), pas en
+    // notation 'groupe:artefact'. On indexe aussi le groupe pour que le triage
+    // puisse conclure sur ces écosystèmes.
+    if (p.pkg.includes(':')) {
+      const group = p.pkg.split(':')[0];
+      if (!probesByPackage.has(group)) probesByPackage.set(group, merged);
+    }
+    // NuGet pointé ('Newtonsoft.Json') : le code ne connaît que 'Newtonsoft'.
+    if (p.pkg.includes('.') && !p.pkg.includes('/') && !p.pkg.startsWith('@')) {
+      const first = p.pkg.split('.')[0];
+      if (!probesByPackage.has(first)) probesByPackage.set(first, merged);
+    }
   }
   const evidence: CodeEvidence = emptyEvidence();
+  const templateFiles = templateFileTypes(templates);
   const excludePattern = `{${exclude.map((e) => `**/${e}/**`).join(',')}}`;
 
   // On demande une entrée de plus que la limite pour détecter la troncature.
@@ -133,7 +150,8 @@ export async function scanWorkspaceFiles(opts: {
         AUDIT_FILE_TYPES.test(u.fsPath) ||
         WEBSEC_FILE_TYPES.test(u.fsPath) ||
         INFRA_FILE_TYPES.test(u.fsPath) ||
-        ATTACK_FILE_TYPES.test(u.fsPath))
+        ATTACK_FILE_TYPES.test(u.fsPath) ||
+        templateFiles?.test(u.fsPath))
   );
 
   const findings: Finding[] = [];
@@ -212,6 +230,9 @@ export async function scanWorkspaceFiles(opts: {
       }
       if (ATTACK_FILE_TYPES.test(uri.fsPath)) {
         perFile.push(...scanAttackInText(uri.fsPath, rel, text));
+      }
+      if (templateFiles?.test(uri.fsPath)) {
+        perFile.push(...scanTemplatesInText(uri.fsPath, rel, text, templates));
       }
       if (standardRules.length > 0 && STANDARDS_FILE_TYPES.test(uri.fsPath)) {
         perFile.push(...scanStandardsInText(uri.fsPath, rel, text, standardRules));

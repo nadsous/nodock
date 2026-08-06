@@ -25,7 +25,7 @@ test('le nonce est appliqué à la CSP et au script', () => {
 });
 
 test('les conteneurs attendus par le script existent', () => {
-  for (const id of ['notes', 'chips', 'findings', 'scan-status', 'scan-results', 'news-list']) {
+  for (const id of ['notes', 'chips', 'findings', 'scan-status', 'scan-results', 'news-list', 'scan-info']) {
     assert.ok(html.includes(`id="${id}"`), `#${id} manquant`);
   }
 });
@@ -34,4 +34,19 @@ test('le rapport est persisté et restauré côté webview', () => {
   assert.ok(html.includes('vscode.setState('), 'le rapport doit être mémorisé');
   assert.ok(html.includes('vscode.getState()'), 'le rapport doit être restauré');
   assert.ok(html.includes("command: 'ready'"), 'le webview doit signaler qu\'il est prêt');
+});
+
+test('le script module morphicons précède le script applicatif quand morphLib est fourni', () => {
+  const lib = 'window.NDK_MORPH = { createMorph: function(){} };';
+  const withLib = getWebviewHtml(fakeWebview, NONCE, lib, { shield: 'M1 1h2v2z' });
+  const moduleTag = `<script type="module" nonce="${NONCE}">`;
+  assert.ok(withLib.includes(moduleTag + lib), 'script module morphicons manquant');
+  assert.ok(
+    withLib.indexOf(moduleTag) < withLib.indexOf(`<script nonce="${NONCE}">`),
+    'le module morphicons doit être émis avant le script applicatif'
+  );
+  // Sans librairie : pas de script module, le panneau reste fonctionnel.
+  assert.ok(!html.includes('<script type="module"'));
+  // Les icônes injectées arrivent dans le script applicatif.
+  assert.ok(withLib.includes('M1 1h2v2z'), 'les données d\'icônes doivent être injectées');
 });

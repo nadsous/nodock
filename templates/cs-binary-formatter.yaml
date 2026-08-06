@@ -1,0 +1,14 @@
+id: NDK-CS-002
+info:
+  name: Usage de BinaryFormatter
+  severity: critical
+  description: BinaryFormatter est dangereux par conception : la désérialisation de données non fiables permet l'exécution de code arbitraire, sans mitigation fiable possible ; la classe est obsolète et retirée de .NET 8+.
+  remediation: Remplacez BinaryFormatter par System.Text.Json, XML/JSON serializers ou protobuf ; ne désérialisez jamais de données externes avec BinaryFormatter.
+  reference: https://cwe.mitre.org/data/definitions/502.html
+  tags: csharp, deserialisation
+files: '\.cs$'
+matchers:
+  - type: regex
+    pattern: '\bBinaryFormatter\b'
+exempt: '//\s*(safe|legacy)'
+condition: or

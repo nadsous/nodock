@@ -1,0 +1,13 @@
+id: NDK-RS-002
+info:
+  name: from_utf8_unchecked sur données non validées
+  severity: medium
+  description: from_utf8_unchecked crée une chaîne sans valider l'encodage UTF-8 ; sur des données externes, cela peut produire des chaînes invalides provoquant des comportements indéfinis et briser les garanties de sécurité mémoire de Rust.
+  remediation: Utilisez String::from_utf8 ou str::from_utf8 qui valident les données et retournent une erreur explicite ; réservez les variantes unchecked aux données dont la validité est prouvée.
+  reference: https://cwe.mitre.org/data/definitions/20.html
+  tags: rust, unsafe, validation
+files: '\.rs$'
+matchers:
+  - type: regex
+    pattern: '\bfrom_utf8_unchecked\s*\('
+condition: or

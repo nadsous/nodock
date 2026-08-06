@@ -191,6 +191,71 @@ test('packageOfSpecifier gère scopes, sous-chemins et builtins', () => {
 });
 
 // ---------------------------------------------------------------------------
+test('extraction des imports Go (simple et bloc)', () => {
+  const go = extractImports(
+    'main.go',
+    `package main
+import "github.com/gin-gonic/gin"
+import (
+	"fmt"
+	"github.com/jackc/pgx/v5"
+)`
+  );
+  assert.ok(go.packages.has('github.com/gin-gonic/gin'), 'le chemin complet est le nom OSV Go');
+  assert.ok(go.packages.has('github.com/jackc/pgx/v5'));
+  assert.ok(!go.packages.has('fmt'), 'la bibliothèque standard est écartée');
+});
+
+test('extraction des imports Rust (use / extern crate, underscore → tiret)', () => {
+  const rs = extractImports(
+    'main.rs',
+    'use tokio_util::codec::LinesCodec;\nuse serde_json::Value;\nextern crate lazy_static;'
+  );
+  assert.ok(rs.packages.has('serde_json'));
+  assert.ok(rs.packages.has('tokio-util'), 'crates.io publie tokio-util, le code importe tokio_util');
+  assert.ok(rs.packages.has('lazy_static') || rs.packages.has('lazy-static'));
+  assert.ok(!rs.packages.has('std'));
+});
+
+test('extraction des imports Java/Kotlin (préfixe de groupe Maven)', () => {
+  const j = extractImports(
+    'App.java',
+    'import org.apache.logging.log4j.Logger;\nimport java.util.List;'
+  );
+  assert.ok(j.packages.has('org.apache.logging.log4j'));
+  assert.ok(!j.packages.has('java'), 'le JDK est écarté');
+  assert.ok(![...j.packages].some((p) => p.startsWith('java.util')));
+});
+
+test('extraction des imports PHP (use Vendor\\Package → packagist)', () => {
+  // Le paquet Packagist se déduit du préfixe de namespace 'Vendor\Package'.
+  // Cas idéal : Monolog\Logger → monolog/monolog. Cas limite documenté :
+  // GuzzleHttp\Client → guzzlehttp/client (le vrai paquet 'guzzle' n'est pas
+  // déductible du namespace — le triage restera prudent).
+  const php = extractImports(
+    'index.php',
+    '<?php\nuse GuzzleHttp\\Client;\nuse Monolog\\Logger;\nuse Illuminate\\Support\\Facades\\Auth;'
+  );
+  assert.ok(php.packages.has('illuminate/support'));
+  // Heuristique documentée : Monolog\Logger → monolog/logger (le vrai paquet
+  // 'monolog/monolog' n'est pas déductible du namespace).
+  assert.ok(php.packages.has('monolog/logger'));
+  assert.ok(php.packages.has('guzzlehttp/client'));
+});
+
+test('extraction des imports Ruby et C#', () => {
+  const rb = extractImports('app.rb', "require 'rails'\nrequire 'sidekiq'\nrequire 'net/http'\nrequire_relative './x'");
+  assert.ok(rb.packages.has('rails'));
+  assert.ok(rb.packages.has('sidekiq'));
+  assert.ok(!rb.packages.has('net'), 'net/http est la bibliothèque standard Ruby');
+  assert.ok(!rb.specifiers.has('./x'), 'require_relative est local');
+
+  const cs = extractImports('Program.cs', 'using Newtonsoft.Json;\nusing System.Text;');
+  assert.ok(cs.packages.has('Newtonsoft'));
+  assert.ok(!cs.packages.has('System'), 'le framework .NET est écarté');
+});
+
+// ---------------------------------------------------------------------------
 test('les sorties de build sont reconnues comme générées', () => {
   assert.ok(isGeneratedPath('apps/frontend/.next/dev/server/chunks/ssr/021f_yjs.js'));
   assert.ok(isGeneratedPath('packages/ui/dist/index.js'));

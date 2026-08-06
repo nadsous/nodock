@@ -1,0 +1,13 @@
+id: NDK-PHP-001
+info:
+  name: Appel à eval()
+  severity: high
+  description: eval() exécute du code PHP arbitraire ; si une partie de la chaîne provient d'une entrée utilisateur, un attaquant obtient l'exécution de code à distance sur le serveur.
+  remediation: Évitez eval() systématiquement ; utilisez des structures de données, des tableaux de fonctions ou un moteur de templates pour les comportements dynamiques.
+  reference: https://cwe.mitre.org/data/definitions/95.html
+  tags: php, injection
+files: '\.php$'
+matchers:
+  - type: regex
+    pattern: '(?<![\w:])eval\s*\('
+condition: or

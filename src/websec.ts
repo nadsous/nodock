@@ -183,7 +183,10 @@ const RULES: WebSecRule[] = [
     id: 'WEB-PY-001',
     serverOnly: true,
     name: 'Requête sortante vers une URL fournie par l\'utilisateur',
-    regex: /requests\.(get|post|put)\s*\(\s*[^)]*(request\.(args|form|json|GET|POST)|params\[)/,
+    // httpx et aiohttp sont les clients par défaut d'une API asynchrone
+    // (FastAPI) : les ignorer laissait passer la même SSRF que `requests`.
+    regex:
+      /\b(requests|httpx|client|session)\.(get|post|put|patch|delete|stream|request)\s*\(\s*[^)]*(request\.(args|form|json|GET|POST)|params\[)|urlopen\s*\(\s*[^)]*request\.(args|form|json|GET|POST)/,
     languages: PY,
     severity: 'high',
     description:
@@ -200,6 +203,76 @@ const RULES: WebSecRule[] = [
     description:
       'La requête SQL est assemblée par formatage de chaîne : la donnée fournie est interprétée comme du code SQL.',
     fix: 'Passez les valeurs en paramètres : cursor.execute("SELECT … WHERE id = %s", (id,)).',
+  },
+
+  // --- FastAPI / Starlette ---
+  {
+    id: 'WEB-PY-003',
+    serverOnly: true,
+    name: 'CORS ouvert à toutes les origines',
+    regex:
+      /allow_origins\s*=\s*\[?\s*["']\*["']|allow_origin_regex\s*=\s*["'](\.\*|\^?\.\*\$?)["']/,
+    languages: PY,
+    severity: 'high',
+    description:
+      'Le middleware CORS accepte n\'importe quelle origine. Combiné à `allow_credentials=True` — ce que FastAPI accepte sans broncher alors que la spécification l\'interdit avec `*` — n\'importe quel site peut appeler votre API avec les cookies de vos utilisateurs et lire les réponses.',
+    fix: 'Énumérez les origines : allow_origins=["https://app.exemple.fr"]. Si vous avez besoin de plusieurs domaines dynamiques, comparez `request.headers["origin"]` à une liste blanche avant de répondre.',
+  },
+  {
+    id: 'WEB-PY-004',
+    serverOnly: true,
+    name: 'Jeton JWT décodé sans vérification de signature',
+    regex:
+      /["']verify_signature["']\s*:\s*False|jwt\.decode\s*\([^)]*verify\s*=\s*False|get_unverified_claims\s*\(|jwt\.get_unverified_header\s*\([^)]*\)\s*\[/,
+    languages: PY,
+    severity: 'critical',
+    description:
+      'Le contenu du jeton est lu sans que la signature soit vérifiée : n\'importe qui peut en forger un et se déclarer administrateur. `verify_signature: False` n\'a de sens que dans un test, jamais sur un chemin de requête.',
+    fix: 'jwt.decode(token, cle, algorithms=["HS256"]) — en fixant explicitement l\'algorithme attendu, et en interceptant JWTError pour renvoyer un 401.',
+  },
+  {
+    id: 'WEB-PY-005',
+    serverOnly: true,
+    name: 'SQLAlchemy : requête text() assemblée par formatage',
+    regex: /\btext\s*\(\s*(f["']|["'][^"']*["']\s*[+%]|["'][^"']*["']\s*\.\s*format\s*\()/,
+    languages: PY,
+    severity: 'high',
+    description:
+      '`text()` livre la chaîne au moteur telle quelle : l\'assembler par f-string ou concaténation replace exactement l\'injection SQL que l\'ORM évitait. Un `id` valant `1 OR 1=1` change le sens de la requête.',
+    fix: 'Utilisez des paramètres liés : session.execute(text("SELECT … WHERE id = :id"), {"id": id}) — ou restez sur les constructions ORM (select(Article).where(Article.id == id)).',
+  },
+  {
+    id: 'WEB-PY-006',
+    serverOnly: true,
+    name: 'Chemin de fichier construit avec une donnée de requête',
+    regex:
+      /\b(open|FileResponse|send_file|os\.remove|shutil\.(copy|move)|Path)\s*\(\s*f["'][^"']*\{/,
+    languages: PY,
+    severity: 'high',
+    description:
+      'Un chemin de fichier est interpolé dans une f-string. Sur une route de téléchargement, un nom contenant `../../etc/passwd` sort du dossier prévu — et sur une écriture ou une suppression, il atteint des fichiers du serveur.',
+    fix: 'Résolvez le chemin puis vérifiez qu\'il reste sous la racine autorisée : `chemin = (RACINE / nom).resolve()` suivi de `chemin.is_relative_to(RACINE.resolve())`. Mieux : ne jamais accepter de nom de fichier, mais un identifiant que vous traduisez vous-même.',
+  },
+  {
+    id: 'WEB-PY-007',
+    serverOnly: true,
+    name: 'HTML assemblé par interpolation dans la réponse',
+    regex: /\b(HTMLResponse|Markup|render_template_string)\s*\(\s*f["']|HTMLResponse\s*\(\s*[^)]*\+/,
+    languages: PY,
+    severity: 'high',
+    description:
+      'Le HTML renvoyé est construit par interpolation : une valeur venue de l\'appelant qui contient `<script>` s\'exécute dans le navigateur de la victime (XSS). Contrairement aux templates Jinja2, aucune échappement n\'a lieu ici.',
+    fix: 'Passez par un template avec échappement automatique (Jinja2Templates de FastAPI) et transmettez les valeurs en contexte, jamais dans la chaîne du template.',
+  },
+  {
+    id: 'WEB-PY-008',
+    name: 'Échappement automatique des templates désactivé',
+    regex: /autoescape\s*=\s*False/,
+    languages: PY,
+    severity: 'high',
+    description:
+      'Sans échappement automatique, chaque variable insérée dans un template est du HTML brut : toute valeur d\'origine utilisateur devient une XSS potentielle, et il suffit d\'un oubli de `|e` pour ouvrir la faille.',
+    fix: 'autoescape=True (ou select_autoescape()) et utilisez `|safe` ponctuellement, uniquement sur du contenu que vous avez vous-même produit ou nettoyé.',
   },
 ];
 

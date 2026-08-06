@@ -1,0 +1,14 @@
+id: NDK-PHP-005
+info:
+  name: unserialize() sur données non fiables
+  severity: high
+  description: unserialize() sur des données contrôlées par un attaquant permet l'injection d'objets PHP : via des méthodes magiques (__wakeup, __destruct), l'attaquant peut exécuter du code arbitraire.
+  remediation: Préférez json_decode pour les données externes ; si unserialize est requis, passez l'option allowed_classes à false ou à une liste blanche stricte.
+  reference: https://cwe.mitre.org/data/definitions/502.html
+  tags: php, deserialisation
+files: '\.php$'
+matchers:
+  - type: regex
+    pattern: '\bunserialize\s*\('
+exempt: 'allowed_classes\s*=>'
+condition: or

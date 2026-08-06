@@ -1,0 +1,13 @@
+id: NDK-RB-001
+info:
+  name: Exécution de commande système (system/exec/spawn)
+  severity: high
+  description: system, exec ou spawn avec une chaîne contenant des données externes permet l'injection de commandes shell : un attaquant peut exécuter du code arbitraire avec les droits du processus Ruby.
+  remediation: Utilisez la forme tableau (system('cmd', 'arg')) avec des arguments validés par liste blanche ; évitez les backticks et l'interpolation d'entrées utilisateur.
+  reference: https://cwe.mitre.org/data/definitions/78.html
+  tags: ruby, injection
+files: '\.rb$'
+matchers:
+  - type: regex
+    pattern: '\b(system|exec|spawn)\s*\(?\s*[''`"]'
+condition: or

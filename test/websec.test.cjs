@@ -263,3 +263,80 @@ test('CycloneDX : un triage « exploitable » se traduit en exploitable', () => 
   assert.equal(bom.vulnerabilities[0].analysis.state, 'exploitable');
   assert.equal(bom.vulnerabilities[0].analysis.justification, undefined);
 });
+
+// ---------------------------------------------------------------------------
+// FastAPI / Starlette
+// ---------------------------------------------------------------------------
+const py = (t) => scanWebSecInText('app/main.py', 'app/main.py', t).map((f) => f.id);
+
+test('FastAPI : CORS ouvert à toutes les origines', () => {
+  assert.ok(py('    allow_origins=["*"],').includes('WEB-PY-003'));
+  assert.ok(py('    allow_origin_regex=".*",').includes('WEB-PY-003'));
+  assert.ok(
+    !py('    allow_origins=["https://app.exemple.fr"],').includes('WEB-PY-003'),
+    'une liste blanche explicite est la bonne pratique'
+  );
+});
+
+test('FastAPI : JWT décodé sans vérifier la signature', () => {
+  assert.ok(
+    py('claims = jwt.decode(token, key="", options={"verify_signature": False})').includes(
+      'WEB-PY-004'
+    )
+  );
+  assert.ok(py('data = jwt.get_unverified_claims(token)').includes('WEB-PY-004'));
+  assert.ok(
+    !py('claims = jwt.decode(token, SECRET, algorithms=["HS256"])').includes('WEB-PY-004'),
+    'un décodage vérifié ne mérite aucun reproche'
+  );
+});
+
+test('FastAPI : SQLAlchemy text() assemblé par formatage', () => {
+  assert.ok(py('rows = await session.execute(text(f"SELECT * FROM u WHERE id = {uid}"))').includes('WEB-PY-005'));
+  assert.ok(py('rows = session.execute(text("SELECT * FROM u WHERE id = " + uid))').includes('WEB-PY-005'));
+  assert.ok(
+    !py('rows = await session.execute(text("SELECT * FROM u WHERE id = :id"), {"id": uid})').includes(
+      'WEB-PY-005'
+    ),
+    'un paramètre lié est la forme correcte'
+  );
+});
+
+test('FastAPI : chemin de fichier interpolé', () => {
+  assert.ok(py('return FileResponse(f"uploads/{nom}")').includes('WEB-PY-006'));
+  assert.ok(py('with open(f"/data/{nom}.json") as fh:').includes('WEB-PY-006'));
+  assert.ok(
+    !py('return FileResponse(RACINE / str(uuid4()))').includes('WEB-PY-006'),
+    'un nom généré côté serveur ne sort pas du dossier'
+  );
+});
+
+test('FastAPI : HTML assemblé par interpolation', () => {
+  assert.ok(py('return HTMLResponse(f"<h1>Bonjour {nom}</h1>")').includes('WEB-PY-007'));
+  assert.ok(
+    !py('return templates.TemplateResponse("accueil.html", {"request": request, "nom": nom})').includes(
+      'WEB-PY-007'
+    ),
+    'un template échappe automatiquement'
+  );
+});
+
+test('FastAPI : échappement de template désactivé', () => {
+  assert.ok(py('env = Environment(loader=loader, autoescape=False)').includes('WEB-PY-008'));
+  assert.ok(!py('env = Environment(loader=loader, autoescape=True)').includes('WEB-PY-008'));
+});
+
+test('FastAPI : SSRF via httpx', () => {
+  assert.ok(py('r = await client.get(request.args.get("url"))').includes('WEB-PY-001'));
+  assert.ok(
+    !py('r = await client.get("https://api.stripe.com/v1/charges")').includes('WEB-PY-001'),
+    'une URL constante ne pose pas de problème'
+  );
+});
+
+test('les règles Python ne s\'appliquent pas aux fichiers JS', () => {
+  assert.deepEqual(
+    ids('const cors = { allow_origins: ["*"] };').filter((id) => id.startsWith('WEB-PY-')),
+    []
+  );
+});

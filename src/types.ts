@@ -34,6 +34,8 @@ export interface Finding {
   /** Package concerné (pour les dépendances) */
   package?: string;
   version?: string;
+  /** Écosystème OSV du package (npm, PyPI, Packagist…) — sert au purl du SBOM. */
+  ecosystem?: string;
   /** Version qui corrige la vulnérabilité, si connue */
   fixedVersion?: string;
   /** CVE / GHSA / identifiant de règle */
@@ -78,6 +80,10 @@ export interface ScanReport {
   cancelled?: boolean;
   /** Inventaire des dépendances installées, pour l'export SBOM. */
   components?: Array<{ name: string; version: string; ecosystem: string }>;
+  /** Score de sécurité /100, pondéré par le triage (voir score.ts). */
+  score?: number;
+  /** Score du scan précédent, pour mesurer la progression ou la régression. */
+  previousScore?: number;
 }
 
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];

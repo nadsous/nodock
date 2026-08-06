@@ -1,0 +1,14 @@
+id: NDK-GO-002
+info:
+  name: Requête SQL construite avec fmt.Sprintf
+  severity: high
+  description: Construire une requête SQL par formatage de chaîne avec fmt.Sprintf permet à un attaquant de modifier la structure de la requête via des entrées malveillantes (injection SQL), menant à la fuite, la modification ou la destruction de données.
+  remediation: Utilisez des requêtes paramétrées avec des placeholders ($1, ?) via database/sql ; évitez toute concaténation ou formatage de chaîne pour assembler du SQL.
+  reference: https://cwe.mitre.org/data/definitions/89.html
+  tags: go, injection, sql
+files: '\.go$'
+matchers:
+  - type: regex
+    pattern: 'fmt\.Sprintf\s*\(\s*"(SELECT|INSERT|UPDATE|DELETE)'
+    flags: i
+condition: or

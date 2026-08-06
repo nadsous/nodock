@@ -17,6 +17,8 @@ const PURL_TYPE: Record<string, string> = {
   Go: 'golang',
   Maven: 'maven',
   RubyGems: 'gem',
+  Packagist: 'composer',
+  NuGet: 'nuget',
 };
 
 export interface SbomComponent {
@@ -31,6 +33,11 @@ export function toPurl(component: SbomComponent): string {
   if (type === 'maven' && component.name.includes(':')) {
     const [group, artifact] = component.name.split(':');
     return `pkg:maven/${group}/${artifact}@${component.version}`;
+  }
+  // Écosystèmes à namespace : le chemin fait partie de l'identité du paquet
+  // (pkg:golang/github.com/x/y, pkg:composer/vendor/package) — il garde ses '/'.
+  if ((type === 'golang' || type === 'composer') && component.name.includes('/')) {
+    return `pkg:${type}/${component.name}@${component.version}`;
   }
   // Le scope npm garde son slash ; le reste est encodé.
   const name = component.name.startsWith('@')
@@ -54,7 +61,8 @@ const SEVERITY_TO_CYCLONEDX: Record<string, string> = {
 export function toCycloneDx(
   components: SbomComponent[],
   findings: Finding[],
-  meta: { name: string; version: string } = { name: 'nodock-scan', version: '1.0.0' }
+  meta: { name: string; version: string } = { name: 'nodock-scan', version: '1.0.0' },
+  toolVersion = 'dev'
 ): object {
   const seen = new Set<string>();
   const uniqueComponents = components.filter((c) => {
@@ -64,6 +72,16 @@ export function toCycloneDx(
     return true;
   });
 
+  // L'écosystème d'une vulnérabilité vient du finding ; sinon on le retrouve
+  // via le composant installé du même nom. Jamais 'npm' par défaut : un purl
+  // erroné fait rater le rapprochement dans les outils qui consomment le SBOM.
+  const ecosystemByName = new Map<string, string>();
+  for (const c of components) {
+    if (!ecosystemByName.has(c.name)) ecosystemByName.set(c.name, c.ecosystem);
+  }
+  const ecosystemOf = (f: Finding): string =>
+    f.ecosystem ?? ecosystemByName.get(f.package ?? '') ?? 'generic';
+
   const vulnerable = findings.filter((f) => f.kind === 'dependency' && f.package && f.id);
 
   return {
@@ -72,7 +90,7 @@ export function toCycloneDx(
     version: 1,
     metadata: {
       timestamp: new Date().toISOString(),
-      tools: [{ vendor: 'Nodock', name: 'Nodock', version: '0.6.0-alpha' }],
+      tools: [{ vendor: 'Nodock', name: 'Nodock', version: toolVersion }],
       component: { type: 'application', name: meta.name, version: meta.version },
     },
     components: uniqueComponents.map((c) => ({
@@ -93,7 +111,9 @@ export function toCycloneDx(
         },
       ],
       description: f.title,
-      affects: [{ ref: toPurl({ name: f.package!, version: f.version ?? '', ecosystem: 'npm' }) }],
+      affects: [
+        { ref: toPurl({ name: f.package!, version: f.version ?? '', ecosystem: ecosystemOf(f) }) },
+      ],
       ...(f.cwe
         ? { cwes: f.cwe.split(',').map((c) => Number(c.trim().replace(/\D/g, ''))).filter(Boolean) }
         : {}),

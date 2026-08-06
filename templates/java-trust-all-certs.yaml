@@ -1,0 +1,13 @@
+id: NDK-JAVA-004
+info:
+  name: Validation des certificats désactivée (trust-all)
+  severity: critical
+  description: Un X509TrustManager qui accepte tout ou un HostnameVerifier qui retourne toujours true neutralise la protection TLS : un attaquant sur le réseau peut intercepter et modifier le trafic avec un certificat auto-signé.
+  remediation: Utilisez le TrustManager par défaut de la JVM avec un truststore correctement configuré ; évitez tout TrustManager ou HostnameVerifier permissif, même en développement.
+  reference: https://cwe.mitre.org/data/definitions/295.html
+  tags: java, kotlin, tls, crypto
+files: '\.(java|kt)$'
+matchers:
+  - type: regex
+    pattern: 'X509TrustManager|TrustAll|HostnameVerifier.*->\s*true'
+condition: or

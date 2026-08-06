@@ -1,0 +1,13 @@
+id: NDK-GO-001
+info:
+  name: exec.Command avec données externes
+  severity: high
+  description: L'exécution de commandes via exec.Command avec des arguments construits à partir de données externes permet à un attaquant d'injecter des commandes arbitraires sur le système hôte.
+  remediation: Préférez une liste blanche de commandes et arguments autorisés ; si exec.Command est indispensable, validez strictement chaque argument et n'interpolez jamais d'entrée utilisateur dans la commande.
+  reference: https://cwe.mitre.org/data/definitions/78.html
+  tags: go, injection
+files: '\.go$'
+matchers:
+  - type: regex
+    pattern: '\bexec\.Command\s*\('
+condition: or

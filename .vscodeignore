@@ -2,6 +2,7 @@
 src/**
 out/**/*.map
 node_modules/**
+!node_modules/morphicons/**
 tsconfig.json
 .gitignore
 **/*.ts
@@ -9,7 +10,6 @@ test/**
 test-smoke.mjs
 package-lock.json
 .claude/**
-.vscode/**
 **/*.vsix
 .nodockignore
 scripts/**

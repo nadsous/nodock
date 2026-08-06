@@ -1,0 +1,14 @@
+id: NDK-PHP-004
+info:
+  name: Hachage faible md5()/sha1()
+  severity: medium
+  description: md5() et sha1() sont cassés : pour des mots de passe ou des jetons, un attaquant exploite collisions et tables arc-en-ciel pour retrouver les valeurs d'origine ou forger des empreintes.
+  remediation: Utilisez password_hash/password_verify pour les mots de passe et hash('sha256', ...) pour l'intégrité ; évitez md5/sha1 pour tout usage de sécurité.
+  reference: https://cwe.mitre.org/data/definitions/328.html
+  tags: php, crypto
+files: '\.php$'
+matchers:
+  - type: regex
+    pattern: '\b(md5|sha1)\s*\('
+exempt: '\b(md5|sha1)\s*\(\s*(file|get_file_contents)'
+condition: or

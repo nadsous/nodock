@@ -5,7 +5,15 @@
  * rester testable par un simple `node --test`.
  */
 
-export type Ecosystem = 'npm' | 'PyPI' | 'crates.io' | 'Go' | 'Maven' | 'RubyGems';
+export type Ecosystem =
+  | 'npm'
+  | 'PyPI'
+  | 'crates.io'
+  | 'Go'
+  | 'Maven'
+  | 'RubyGems'
+  | 'Packagist'
+  | 'NuGet';
 
 export interface ParsedDep {
   name: string;
@@ -182,12 +190,194 @@ export function parsePackageJson(json: unknown, file: string): ParsedDep[] {
   return deps;
 }
 
+/**
+ * Nom PyPI canonique (PEP 503) : minuscules, `_` et `.` unifiés en `-`.
+ * OSV interroge les paquets sous cette forme, et c'est elle qui permet de
+ * rapprocher un `Flask` déclaré dans un manifeste du `flask` d'un lockfile.
+ */
+export function normalizePyPI(name: string): string {
+  return name.trim().toLowerCase().replace(/[-_.]+/g, '-');
+}
+
 export function parseRequirements(text: string, file: string): ParsedDep[] {
   const deps: ParsedDep[] = [];
   for (const line of text.split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Za-z0-9_.\-]+)\s*==\s*([0-9][\w.]*)/);
-    if (m) deps.push({ name: m[1], version: m[2], ecosystem: 'PyPI', file });
+    if (m) deps.push({ name: normalizePyPI(m[1]), version: m[2], ecosystem: 'PyPI', file });
   }
+  return deps;
+}
+
+// ---------------------------------------------------------------------------
+// pyproject.toml — le manifeste des projets Python modernes (FastAPI, uv,
+// Poetry, Hatch). Sans lui, un projet sans requirements.txt n'expose aucune
+// dépendance à analyser.
+// ---------------------------------------------------------------------------
+
+/** Sections Poetry déclarant des dépendances (`clé = version`). */
+const POETRY_DEPS =
+  /^tool\.poetry\.(dependencies|dev-dependencies|group\.[\w.-]+\.dependencies)$/;
+
+/** Retire un commentaire TOML de fin de ligne, sans toucher aux dièses cités. */
+function stripTomlComment(line: string): string {
+  let quote: string | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (quote) {
+      if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === '#') {
+      return line.slice(0, i);
+    }
+  }
+  return line;
+}
+
+/** Solde des crochets d'une ligne, hors chaînes (un tableau peut être multiligne). */
+function bracketDelta(line: string): number {
+  let quote: string | null = null;
+  let depth = 0;
+  for (const c of line) {
+    if (quote) {
+      if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === '[') {
+      depth++;
+    } else if (c === ']') {
+      depth--;
+    }
+  }
+  return depth;
+}
+
+/**
+ * Version testable depuis un spécificateur PEP 440.
+ * Les clauses d'exclusion sont retirées d'abord : dans `!=1.5.0,>=1.4`, prendre
+ * 1.5.0 désignerait précisément la version que le projet refuse d'installer.
+ */
+function versionFromSpecifier(spec: string): { version: string; imprecise: boolean } | null {
+  const exact = spec.match(/^\s*===?\s*([0-9][\w.]*)\s*$/);
+  if (exact) return { version: exact[1], imprecise: false };
+
+  const kept = spec
+    .split(',')
+    .filter((c) => !/^\s*!=/.test(c))
+    .join(',');
+  const version = versionFromRange(kept);
+  return version ? { version, imprecise: true } : null;
+}
+
+/**
+ * Exigence PEP 508 : `fastapi[all]>=0.110,<1 ; python_version >= "3.10"`.
+ * Retourne null pour les dépendances sans version testable (URL directe,
+ * chemin local, contrainte ouverte).
+ */
+function parsePep508(req: string, file: string): ParsedDep | null {
+  const cleaned = req.split(';')[0].trim();
+  const m = cleaned.match(/^([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(.*)$/);
+  if (!m) return null;
+  // `pkg @ https://…` épingle une archive : aucune version PyPI à interroger.
+  if (m[2].trim().startsWith('@')) return null;
+
+  const name = normalizePyPI(m[1]);
+  if (name === 'python') return null;
+  const found = versionFromSpecifier(m[2]);
+  if (!found) return null;
+  return {
+    name,
+    version: found.version,
+    ecosystem: 'PyPI',
+    file,
+    ...(found.imprecise ? { imprecise: true as const } : {}),
+  };
+}
+
+/** pyproject.toml — dépendances PEP 621, groupes PEP 735 et sections Poetry. */
+export function parsePyproject(text: string, file: string): ParsedDep[] {
+  const deps: ParsedDep[] = [];
+  const seen = new Set<string>();
+  const push = (dep: ParsedDep | null): void => {
+    if (!dep) return;
+    const key = `${dep.name}|${dep.version}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    deps.push(dep);
+  };
+
+  /** Contenu d'un tableau : chaque chaîne citée est une exigence PEP 508. */
+  const pushArray = (arrayText: string): void => {
+    for (const m of arrayText.matchAll(/["']([^"']+)["']/g)) push(parsePep508(m[1], file));
+  };
+
+  let section = '';
+  let pending = '';
+  let depth = 0;
+
+  for (const raw of text.split(/\r?\n/)) {
+    const line = stripTomlComment(raw);
+
+    // Tableau étalé sur plusieurs lignes : on accumule jusqu'à la fermeture.
+    if (depth > 0) {
+      pending += `\n${line}`;
+      depth += bracketDelta(line);
+      if (depth <= 0) {
+        pushArray(pending);
+        pending = '';
+        depth = 0;
+      }
+      continue;
+    }
+
+    const header = line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (header) {
+      section = header[1].trim();
+      continue;
+    }
+
+    const assign = line.match(/^\s*(?:"([^"]+)"|([A-Za-z0-9][\w.-]*))\s*=\s*(.*)$/);
+    if (!assign) continue;
+    const key = assign[1] ?? assign[2];
+    const value = assign[3].trim();
+
+    // --- Tableaux d'exigences : PEP 621 et PEP 735 ---
+    const isRequirementArray =
+      (section === 'project' && key === 'dependencies') ||
+      section === 'project.optional-dependencies' ||
+      section === 'dependency-groups';
+
+    if (isRequirementArray && value.startsWith('[')) {
+      const delta = bracketDelta(value);
+      if (delta <= 0) {
+        pushArray(value);
+      } else {
+        pending = value;
+        depth = delta;
+      }
+      continue;
+    }
+
+    // --- Poetry : `fastapi = "^0.110.0"` ou `{ version = "…", extras = […] }` ---
+    if (POETRY_DEPS.test(section)) {
+      const spec = value.startsWith('{')
+        ? value.match(/version\s*=\s*["']([^"']+)["']/)?.[1]
+        : value.match(/^["']([^"']+)["']/)?.[1];
+      if (!spec) continue; // dépendance locale, git ou sans contrainte
+
+      const name = normalizePyPI(key);
+      if (name === 'python') continue;
+
+      // En Poetry une version nue (`"1.2.3"`) est une égalité, pas un range.
+      if (/^\d[\w.]*$/.test(spec)) {
+        push({ name, version: spec, ecosystem: 'PyPI', file });
+      } else {
+        const found = versionFromSpecifier(spec);
+        if (found) push({ name, version: found.version, ecosystem: 'PyPI', file, imprecise: true });
+      }
+    }
+  }
+
   return deps;
 }
 
@@ -239,6 +429,87 @@ export function parseGemfileLock(text: string, file: string): ParsedDep[] {
   for (const line of text.split(/\r?\n/)) {
     const m = line.match(/^ {4}([a-zA-Z0-9_-]+) \(([0-9][\w.]*)\)$/);
     if (m) deps.push({ name: m[1], version: m[2], ecosystem: 'RubyGems', file });
+  }
+  return deps;
+}
+
+// ---------------------------------------------------------------------------
+// Lockfiles JSON (composer.lock, Pipfile.lock, packages.lock.json)
+// ---------------------------------------------------------------------------
+
+/** composer.lock (PHP) — `packages` et `packages-dev`, versions épinglées. */
+export function parseComposerLock(json: unknown, file: string): ParsedDep[] {
+  const deps: ParsedDep[] = [];
+  const doc = json as {
+    packages?: Array<{ name?: string; version?: string }>;
+    'packages-dev'?: Array<{ name?: string; version?: string }>;
+  };
+  for (const section of ['packages', 'packages-dev'] as const) {
+    for (const entry of doc?.[section] ?? []) {
+      if (!entry?.name || !entry?.version) continue;
+      // La version peut porter un préfixe 'v' que Packagist/OSV n'attend pas.
+      deps.push({
+        name: entry.name.toLowerCase(),
+        version: entry.version.replace(/^v/i, ''),
+        ecosystem: 'Packagist',
+        file,
+      });
+    }
+  }
+  return deps;
+}
+
+/** Pipfile.lock — `default` et `develop`, versions '==1.2.3'. */
+export function parsePipfileLock(json: unknown, file: string): ParsedDep[] {
+  const deps: ParsedDep[] = [];
+  const doc = json as {
+    default?: Record<string, { version?: string }>;
+    develop?: Record<string, { version?: string }>;
+  };
+  for (const section of ['default', 'develop'] as const) {
+    for (const [name, entry] of Object.entries(doc?.[section] ?? {})) {
+      const version = entry?.version?.replace(/^==/, '');
+      if (version && /^[0-9]/.test(version)) {
+        deps.push({ name, version, ecosystem: 'PyPI', file });
+      }
+    }
+  }
+  return deps;
+}
+
+/** packages.lock.json (NuGet) — dépendances regroupées par target framework. */
+export function parseNugetLock(json: unknown, file: string): ParsedDep[] {
+  const deps: ParsedDep[] = [];
+  const doc = json as {
+    dependencies?: Record<string, Record<string, { resolved?: string; type?: string }>>;
+  };
+  for (const target of Object.values(doc?.dependencies ?? {})) {
+    for (const [name, entry] of Object.entries(target)) {
+      if (entry?.resolved && /^[0-9]/.test(entry.resolved)) {
+        deps.push({ name, version: entry.resolved, ecosystem: 'NuGet', file });
+      }
+    }
+  }
+  return deps;
+}
+
+// ---------------------------------------------------------------------------
+// Gradle (manifeste, pas de lockfile répandu → versions de ranges, imprécis)
+// ---------------------------------------------------------------------------
+
+/** build.gradle / build.gradle.kts — notations 'groupe:artefact:version'. */
+export function parseGradle(text: string, file: string): ParsedDep[] {
+  const deps: ParsedDep[] = [];
+  const re =
+    /(?:^|\s)(?:implementation|api|compileOnly|runtimeOnly|testImplementation|testRuntimeOnly|annotationProcessor|kapt|classpath|compile)\s*\(?\s*["']([\w.-]+):([\w.-]+):([0-9][\w.+-]*)["']/gm;
+  for (const m of text.matchAll(re)) {
+    deps.push({
+      name: `${m[1]}:${m[2]}`,
+      version: m[3],
+      ecosystem: 'Maven',
+      file,
+      imprecise: true,
+    });
   }
   return deps;
 }

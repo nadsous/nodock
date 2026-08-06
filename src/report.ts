@@ -11,7 +11,7 @@ const SARIF_LEVEL: Record<Severity, string> = {
 };
 
 /** Convertit un rapport Nodock au format SARIF 2.1.0 (compatible GitHub Code Scanning). */
-export function toSarif(report: ScanReport): object {
+export function toSarif(report: ScanReport, toolVersion = 'dev'): object {
   return {
     $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
     version: '2.1.0',
@@ -20,7 +20,7 @@ export function toSarif(report: ScanReport): object {
         tool: {
           driver: {
             name: 'Nodock',
-            version: '0.6.0-alpha',
+            version: toolVersion,
             informationUri: 'https://github.com/nodock',
             rules: [
               ...new Set(report.findings.map((f) => f.id ?? 'nodock-finding')),
@@ -48,7 +48,7 @@ export function toSarif(report: ScanReport): object {
 }
 
 /** Propose l'enregistrement du rapport en JSON ou SARIF. */
-export async function exportReport(report: ScanReport): Promise<void> {
+export async function exportReport(report: ScanReport, toolVersion = 'dev'): Promise<void> {
   const choice = await vscode.window.showQuickPick(
     [
       { label: 'JSON', description: 'Rapport brut Nodock' },
@@ -72,13 +72,13 @@ export async function exportReport(report: ScanReport): Promise<void> {
   const projectName = vscode.workspace.workspaceFolders?.[0]?.name ?? 'projet';
   const content =
     choice.label === 'SARIF'
-      ? JSON.stringify(toSarif(report), null, 2)
+      ? JSON.stringify(toSarif(report, toolVersion), null, 2)
       : choice.label === 'CycloneDX'
         ? JSON.stringify(
             toCycloneDx(report.components ?? [], report.findings, {
               name: projectName,
               version: '1.0.0',
-            }),
+            }, toolVersion),
             null,
             2
           )
