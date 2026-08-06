@@ -2,8 +2,8 @@
   "name": "nodock",
   "displayName": "Nodock",
   "description": "Scanner de vulnérabilités : dépendances (OSV), secrets, code (SAST) et actualités sécurité — directement dans VS Code.",
-  "version": "0.7.7",
-  "publisher": "nadsous",
+  "version": "0.7.8",
+  "publisher": "nadsite",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -164,7 +164,7 @@
     "morphicons": "^1.4.1"
   },
   "author": {
-    "name": "nadsous",
+    "name": "nads.site",
     "url": "https://github.com/nadsous"
   },
   "icon": "media/nodock.png",
