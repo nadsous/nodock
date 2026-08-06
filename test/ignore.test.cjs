@@ -79,6 +79,19 @@ test('une baseline vide ne filtre rien', () => {
   assert.equal(kept.length, 1);
 });
 
+test('sans règle, `kept` est un tableau distinct de l\'entrée', () => {
+  // Bug constaté en production : `kept` renvoyait la MÊME référence, si bien
+  // qu'un appelant vidant `findings` détruisait aussi `kept`. Résultat : sur
+  // tout projet sans .nodockignore, les 30 findings disparaissaient et le
+  // rapport annonçait « aucune vulnérabilité détectée ».
+  const findings = [f('CMP-009', 'a.ts'), f('NDK-JS-001', 'b.ts')];
+  const { kept } = applyIgnoreRules(findings, []);
+  assert.notEqual(kept, findings, 'doit être un nouveau tableau');
+
+  findings.length = 0; // ce que fait le site d'appel
+  assert.equal(kept.length, 2, 'kept doit survivre au vidage de l\'entrée');
+});
+
 test('les CVE peuvent être arbitrées dans la baseline', () => {
   const rules = parseIgnoreFile('CVE-2026-53512');
   assert.ok(isIgnored({ id: 'CVE-2026-53512', file: 'bun.lock' }, rules));

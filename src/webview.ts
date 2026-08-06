@@ -725,6 +725,10 @@ ${morphScript}<script nonce="${nonce}">
     const parts = [];
     if (typeof s.filesScanned === 'number') parts.push(s.filesScanned + ' fichiers analysés');
     if (typeof s.dependenciesScanned === 'number') parts.push(s.dependenciesScanned + ' dépendances vérifiées');
+    // Distingue « rien à signaler » de « tout a été masqué » ou « rien n'est remonté ».
+    if (typeof s.collected === 'number') parts.push(s.collected + ' trouvés');
+    if (s.ignored) parts.push(s.ignored + ' masqués');
+    if (report.version) parts.push('v' + report.version);
     const age = report.generatedAt ? since(report.generatedAt) : '';
     if (age) parts.push(age);
     el.textContent = parts.join(' · ');

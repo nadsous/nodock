@@ -171,11 +171,17 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
                 : triageFileFinding(f);
           }
 
+          // Mesuré avant la baseline : distingue « rien trouvé » de « tout masqué ».
+          const collected = findings.length;
+
           // --- Baseline : faux positifs déjà arbitrés par l'équipe ---
           const ignoreRules = await loadIgnoreRules();
           const filtered = applyIgnoreRules(findings, ignoreRules);
+          // Copie explicite avant de vider : ne jamais dépendre du fait que
+          // `filtered.kept` soit un tableau distinct de `findings`.
+          const kept = [...filtered.kept];
           findings.length = 0;
-          findings.push(...filtered.kept);
+          findings.push(...kept);
           if (filtered.ignored > 0) {
             notes.push(`${filtered.ignored} finding(s) masqué(s) par .nodockignore.`);
           }
@@ -205,9 +211,12 @@ class NodockPanelProvider implements vscode.WebviewViewProvider {
 
           return {
             generatedAt: new Date().toISOString(),
+            version: this.context.extension.packageJSON?.version,
             findings,
             stats: {
               dependenciesScanned,
+              collected,
+              ignored: filtered.ignored,
               filesScanned,
               critical: count('critical'),
               high: count('high'),

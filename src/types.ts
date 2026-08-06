@@ -68,6 +68,10 @@ export interface ScanReport {
   findings: Finding[];
   stats: {
     dependenciesScanned: number;
+    /** Findings collectés avant application de la baseline. */
+    collected?: number;
+    /** Findings masqués par .nodockignore. */
+    ignored?: number;
     filesScanned: number;
     critical: number;
     high: number;
@@ -78,6 +82,8 @@ export interface ScanReport {
   notes: string[];
   /** true si le scan a été interrompu par l'utilisateur. */
   cancelled?: boolean;
+  /** Version de l'extension ayant produit ce rapport. */
+  version?: string;
   /** Inventaire des dépendances installées, pour l'export SBOM. */
   components?: Array<{ name: string; version: string; ecosystem: string }>;
   /** Score de sécurité /100, pondéré par le triage (voir score.ts). */

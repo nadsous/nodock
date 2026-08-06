@@ -103,7 +103,11 @@ export function applyIgnoreRules(
   findings: Finding[],
   rules: IgnoreRule[]
 ): { kept: Finding[]; ignored: number } {
-  if (rules.length === 0) return { kept: findings, ignored: 0 };
+  // Toujours un NOUVEAU tableau, même sans règle : renvoyer la référence
+  // d'origine permettait à un appelant qui vide `findings` de détruire du même
+  // coup le contenu de `kept`. Sans .nodockignore, tous les findings
+  // disparaissaient — et le rapport annonçait « aucune vulnérabilité ».
+  if (rules.length === 0) return { kept: [...findings], ignored: 0 };
 
   const kept = findings.filter((f) => !isIgnored(f, rules));
   return { kept, ignored: findings.length - kept.length };

@@ -160,6 +160,9 @@ export async function scanWorkspaceFiles(opts: {
   const auditSignals = emptySignals();
   let filesScanned = 0;
   let skippedTooBig = 0;
+  /** Fichiers dont l'analyse a échoué, et les premiers messages associés. */
+  let failed = 0;
+  const firstErrors: string[] = [];
   let skippedGenerated = uris.slice(0, maxFiles).filter((u) => isGeneratedPath(u.fsPath)).length;
 
   for (let i = 0; i < targets.length; i++) {
@@ -239,11 +242,23 @@ export async function scanWorkspaceFiles(opts: {
       }
 
       findings.push(...capPerRule(perFile, rel));
-    } catch {
-      // fichier illisible (binaire, permissions, lien cassé) — ignoré
+    } catch (err) {
+      // Un fichier illisible (binaire, permissions, lien cassé) est normal.
+      // Mais une règle qui lève sur CHAQUE fichier produisait jusqu'ici un
+      // rapport vide et parfaitement silencieux : on garde donc une trace.
+      failed++;
+      if (firstErrors.length < 3) {
+        const rel = vscode.workspace.asRelativePath(uri);
+        firstErrors.push(`${rel} : ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
 
+  if (failed > 0) {
+    notes.push(
+      `${failed} fichier(s) n'ont pas pu être analysés — ${firstErrors.join(' | ')}`
+    );
+  }
   if (skippedGenerated > 0) {
     notes.push(
       `${skippedGenerated} fichier(s) généré(s) ou minifié(s) ignoré(s) (sorties de build, bundles).`
